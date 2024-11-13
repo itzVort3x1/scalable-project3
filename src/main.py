@@ -24,11 +24,20 @@ def main():
                         required=True, help='Sequence number for the message')
     parser.add_argument('--message_content', type=str,
                         required=True, help='Content of the message')
+    parser.add_argument("--host", default="127.0.0.1", help="Server host")
+    parser.add_argument("--port", type=int, default=12345, help="Server port")
+    parser.add_argument("--mode", choices=["client", "server"], help="Start as client or server")
+
 
     args = parser.parse_args()
 
     bob2 = Bob2Protocol(version_major=args.version_major,
-                        version_minor=args.version_minor)
+                        version_minor=args.version_minor, host=args.host, port=args.port)
+    
+    if args.mode == "client":
+        bob2.connect_to_server()
+    elif args.mode == "server":
+        bob2.start_server()
 
     # Build the message
     message = bob2.build_message(
