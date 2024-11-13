@@ -37,8 +37,8 @@ class PersistentServer:
 
     def perform_handshake(self, client_socket):
         server_private_key, server_public_key = self.generate_keys()
+        print(server_private_key, server_public_key)
         client_socket.sendall(str(server_public_key).encode())
-
         client_public_key = int(client_socket.recv(1024).decode())
         shared_secret = pow(client_public_key, server_private_key, P)
         self.shared_key = sha256(str(shared_secret).encode()).digest()

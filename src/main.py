@@ -40,19 +40,19 @@ def main():
         bob2.start_server()
 
     # Build the message
-    message = bob2.build_message(
-        message_type=args.message_type,
-        dest_ipv6=args.dest_ipv6,
-        dest_port=args.dest_port,
-        source_ipv6=args.source_ipv6,
-        source_port=args.source_port,
-        sequence_number=args.sequence_number,
-        message_content=args.message_content
-    )
+    # message = bob2.build_message(
+    #     message_type=args.message_type,
+    #     dest_ipv6=args.dest_ipv6,
+    #     dest_port=args.dest_port,
+    #     source_ipv6=args.source_ipv6,
+    #     source_port=args.source_port,
+    #     sequence_number=args.sequence_number,
+    #     message_content=args.message_content
+    # )
 
-    # Parse the message back
-    parsed_message = bob2.parse_message(message)
-    print(">>>>",parsed_message)
+    # # Parse the message back
+    # parsed_message = bob2.parse_message(message)
+    # print(">>>>",parsed_message)
 
 
 if __name__ == "__main__":

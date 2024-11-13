@@ -36,7 +36,6 @@ class PersistentClient:
         client_private_key, client_public_key = self.generate_keys()
         server_public_key = int(self.client_socket.recv(1024).decode())
         self.client_socket.sendall(str(client_public_key).encode())
-        
         shared_secret = pow(server_public_key, client_private_key, P)
         self.shared_key = sha256(str(shared_secret).encode()).digest()
         print("Shared secret established.")
