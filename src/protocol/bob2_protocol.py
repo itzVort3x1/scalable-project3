@@ -1,4 +1,3 @@
-# protocol.py
 import struct
 import socket
 import logging
@@ -13,10 +12,10 @@ from protocol.handshake import Handshake
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class Bob2Protocol:
-    def __init__(self, version_major=0, version_minor=0, host="127.0.0.1", port=12345, mode="", dest_ipv6="::1", dest_port=12345, source_ipv6="::1", source_port=12345):
+    def __init__(self, version_major=0, version_minor=0, host="0.0.0.0", port=12345, mode="", dest_ipv6="::1", dest_port=12345, source_ipv6="::1", source_port=12345):
         self.version_major = version_major
         self.version_minor = version_minor
-        self.server_host = host
+        self.server_host = host  # Bind to all interfaces
         self.server_port = port
         self.dest_ipv6 = dest_ipv6
         self.dest_port = dest_port
@@ -30,9 +29,11 @@ class Bob2Protocol:
     def start_server(self):
         self.server_socket.bind((self.server_host, self.server_port))
         self.server_socket.listen(1)
-        logging.info(f"Server listening on {self.server_port}")
+        logging.info(f"Server listening on {self.server_host}:{self.server_port}")
+        
         client_socket, addr = self.server_socket.accept()
         logging.info(f"Server connected to {addr}")
+        
         self.perform_handshake(client_socket=client_socket, is_server=True)
         self.handle_communication(client_socket)
 
@@ -86,7 +87,6 @@ class Bob2Protocol:
             logging.error(f"Failed to receive message: {e}")
             return None
 
-
     def handle_communication(self, client_socket):
         logging.info("Starting continuous communication.")
         client_socket.setblocking(0)
@@ -125,3 +125,4 @@ class Bob2Protocol:
                         'message_content': message_content
                     }
                     self.send_message(client_socket, message_dict)
+
