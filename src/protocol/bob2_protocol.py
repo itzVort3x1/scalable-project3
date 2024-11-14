@@ -6,6 +6,7 @@ import json
 import select
 import sys
 import zlib
+import threading
 from protocol.handshake import Handshake
 
 # Configure logging
@@ -25,23 +26,24 @@ class Bob2Protocol:
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.handshake = Handshake()
+        self.connection = None  # To hold the active connection
 
     def start_server(self):
         self.server_socket.bind((self.server_host, self.server_port))
         self.server_socket.listen(1)
         logging.info(f"Server listening on {self.server_host}:{self.server_port}")
         
-        client_socket, addr = self.server_socket.accept()
+        self.connection, addr = self.server_socket.accept()
         logging.info(f"Server connected to {addr}")
         
-        self.perform_handshake(client_socket=client_socket, is_server=True)
-        self.handle_communication(client_socket)
+        self.perform_handshake(client_socket=self.connection, is_server=True)
+        self.start_threads(self.connection)
 
     def connect_to_server(self):
         self.client_socket.connect((self.server_host, self.server_port))
         logging.info(f"Connected to server at {self.server_host}:{self.server_port}")
         self.perform_handshake(client_socket=self.client_socket, is_server=False)
-        self.handle_communication(self.client_socket)
+        self.start_threads(self.client_socket)
 
     def perform_handshake(self, client_socket, is_server):
         if is_server:
@@ -87,42 +89,46 @@ class Bob2Protocol:
             logging.error(f"Failed to receive message: {e}")
             return None
 
-    def handle_communication(self, client_socket):
-        logging.info("Starting continuous communication.")
-        client_socket.setblocking(0)
+    def start_threads(self, client_socket):
+        # Threads for sending and receiving messages
+        receive_thread = threading.Thread(target=self.receive_messages_thread, args=(client_socket,))
+        send_thread = threading.Thread(target=self.send_messages_thread, args=(client_socket,))
+        receive_thread.start()
+        send_thread.start()
+        
+        receive_thread.join()
+        send_thread.join()
+        client_socket.close()
 
+    def receive_messages_thread(self, client_socket):
         while True:
-            readable, _, _ = select.select([client_socket, sys.stdin], [], [])
+            message = self.receive_message(client_socket)
+            if message:
+                logging.info(f"Message from {'server' if self.role == 'client' else 'client'}: {message}")
+            else:
+                logging.info("Connection closed by the other party.")
+                break
 
-            for s in readable:
-                if s == client_socket:
-                    message = self.receive_message(client_socket)
-                    if message:
-                        logging.info(f"Message from {'server' if self.role == 'client' else 'client'}: {message}")
-                    else:
-                        logging.info("Connection closed by the other party.")
-                        return
+    def send_messages_thread(self, client_socket):
+        while True:
+            message_content = input("Enter message to send (or 'exit' to quit): ")
+            if message_content.lower() == "exit":
+                logging.info("Exiting communication.")
+                client_socket.close()
+                break
 
-                elif s == sys.stdin:
-                    message_content = input("Type a message to send (or 'exit' to quit): ")
-                    if message_content.lower() == "exit":
-                        logging.info("Exiting communication.")
-                        client_socket.close()
-                        return
-
-                    message_dict = {
-                        'version_major': self.version_major,
-                        'version_minor': self.version_minor,
-                        'message_type': 0,
-                        'dest_ipv6': self.dest_ipv6,
-                        'dest_port': self.dest_port,
-                        'source_ipv6': self.source_ipv6,
-                        'source_port': self.source_port,
-                        'sequence_number': 1,
-                        'timestamp': int(time.time()),
-                        'message_length': len(message_content),
-                        'checksum': zlib.crc32(message_content.encode('utf-8')),
-                        'message_content': message_content
-                    }
-                    self.send_message(client_socket, message_dict)
-
+            message_dict = {
+                'version_major': self.version_major,
+                'version_minor': self.version_minor,
+                'message_type': 0,
+                'dest_ipv6': self.dest_ipv6,
+                'dest_port': self.dest_port,
+                'source_ipv6': self.source_ipv6,
+                'source_port': self.source_port,
+                'sequence_number': 1,
+                'timestamp': int(time.time()),
+                'message_length': len(message_content),
+                'checksum': zlib.crc32(message_content.encode('utf-8')),
+                'message_content': message_content
+            }
+            self.send_message(client_socket, message_dict)
