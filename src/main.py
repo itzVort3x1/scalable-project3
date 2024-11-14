@@ -32,7 +32,8 @@ def main():
     args = parser.parse_args()
 
     bob2 = Bob2Protocol(version_major=args.version_major,
-                        version_minor=args.version_minor, host=args.host, port=args.port)
+                        version_minor=args.version_minor, host=args.host, port=args.port, dest_ipv6=args.dest_ipv6,
+                        dest_port=args.dest_port, source_ipv6=args.source_ipv6, source_port=args.source_port, mode=args.mode)
     
     if args.mode == "client":
         bob2.connect_to_server()
