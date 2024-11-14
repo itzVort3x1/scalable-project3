@@ -32,7 +32,7 @@ def main():
     args = parser.parse_args()
 
     # Initialize the Bob2Protocol instance
-    bob2 = Bob2Protocol_inter(
+    bob2 = Bob2Protocol(
         version_major=args.version_major,
         version_minor=args.version_minor,
         host=args.host,
