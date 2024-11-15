@@ -8,19 +8,20 @@ import sys
 import zlib
 import threading
 from protocol.handshake import Handshake
+from protocol.Packet_processing import PacketProcessing
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class Bob2Protocol:
-    def __init__(self, version_major=0, version_minor=0, host="0.0.0.0", port=12345, mode="", dest_ipv6="::1", dest_port=12345, source_ipv6="::1", source_port=12345):
+    def __init__(self, version_major=0, version_minor=0, host="0.0.0.0", port=12345, mode="", dest_ip="127.0.0.1", dest_port=12345, source_ip="127.0.0.1", source_port=12345):
         self.version_major = version_major
         self.version_minor = version_minor
         self.server_host = host  # Bind to all interfaces
         self.server_port = port
-        self.dest_ipv6 = dest_ipv6
+        self.dest_ip = dest_ip
         self.dest_port = dest_port
-        self.source_ipv6 = source_ipv6
+        self.source_ip = dest_port
         self.source_port = source_port
         self.role = mode  # Add role to indicate "client" or "server"
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -79,6 +80,9 @@ class Bob2Protocol:
             iv_cipher_text = client_socket.recv(1024)
             if iv_cipher_text:
                 decrypted_message = self.handshake.decrypt_message(iv_cipher_text)
+                print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+                PacketProcessing().process_packet(decrypted_message)
+                print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
                 message_dict = json.loads(decrypted_message)
                 logging.info(f"Message received by {self.role}: {message_dict}")
                 return message_dict
@@ -121,9 +125,9 @@ class Bob2Protocol:
                 'version_major': self.version_major,
                 'version_minor': self.version_minor,
                 'message_type': 0,
-                'dest_ipv6': self.dest_ipv6,
+                'dest_ip': self.dest_ip,
                 'dest_port': self.dest_port,
-                'source_ipv6': self.source_ipv6,
+                'source_ip': self.source_ip,
                 'source_port': self.source_port,
                 'sequence_number': 1,
                 'timestamp': int(time.time()),

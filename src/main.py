@@ -12,11 +12,11 @@ def main():
                         required=True, help='Protocol version minor')
     parser.add_argument('--message_type', type=int, required=True,
                         help='Message type (e.g., data, control, etc.)')
-    parser.add_argument('--dest_ipv6', type=str,
+    parser.add_argument('--dest_ip', type=str,
                         required=True, help='Destination IPv6 address')
     parser.add_argument('--dest_port', type=int,
                         required=True, help='Destination port number')
-    parser.add_argument('--source_ipv6', type=str,
+    parser.add_argument('--source_ip', type=str,
                         required=True, help='Source IPv6 address')
     parser.add_argument('--source_port', type=int,
                         required=True, help='Source port number')
@@ -37,9 +37,9 @@ def main():
         version_minor=args.version_minor,
         host=args.host,
         port=args.port,
-        dest_ipv6=args.dest_ipv6,
+        dest_ip=args.dest_ip,
         dest_port=args.dest_port,
-        source_ipv6=args.source_ipv6,
+        source_ip=args.source_ip,
         source_port=args.source_port,
         mode=args.mode
     )
