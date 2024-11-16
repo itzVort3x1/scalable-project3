@@ -8,9 +8,9 @@ SEND_PORT = 5001     # Port for sending messages
 
 # Sample routing table (Modify as needed)
 routing_table = {
-    "192.168.1.101": "192.168.1.102",  # Forward to 192.168.1.102 for 192.168.1.101
-    "192.168.1.102": "192.168.1.103",  # Forward to 192.168.1.103 for 192.168.1.102
-    "192.168.1.103": None              # Final destination
+    "192.168.185.27": "192.168.185.239",  # Forward to 192.168.1.102 for 192.168.1.101
+    "192.168.185.239": "192.168.185.50",  # Forward to 192.168.1.103 for 192.168.1.102
+    "192.168.185.50": None              # Final destination
 }
 
 def get_local_ip():
