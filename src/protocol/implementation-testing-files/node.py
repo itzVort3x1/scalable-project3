@@ -3,8 +3,8 @@ import threading
 import json
 
 # Configuration
-RECEIVE_PORT = 5000  # Port for receiving messages
-SEND_PORT = 5001     # Port for sending messages
+RECEIVE_PORT = 12345  # Port for receiving messages
+SEND_PORT = 54321     # Port for sending messages
 
 # Sample routing table (Modify as needed)
 routing_table = {
@@ -40,7 +40,8 @@ def handle_connection(conn, addr, local_ip):
             # Determine the next hop
             next_hop = routing_table.get(dest_ip)
             if next_hop:
-                print(f"Forwarding message to {next_hop} for final destination {dest_ip}")
+                # Log the hopping activity
+                print(f"Message hopping: {source_ip} -> {local_ip} -> {next_hop} -> {dest_ip}")
                 forward_message(packet, next_hop)
             else:
                 print(f"No route to {dest_ip}. Packet dropped.")
@@ -53,7 +54,7 @@ def forward_message(packet, next_hop):
     """Forward the message to the next hop."""
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect((next_hop, SEND_PORT))
+            s.connect((next_hop, RECEIVE_PORT))
             s.sendall(json.dumps(packet).encode())
             print(f"Packet forwarded to {next_hop}")
     except Exception as e:
