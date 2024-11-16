@@ -3,8 +3,8 @@ import threading
 import json
 
 # Configuration
-RECEIVE_PORT = 12345  # Port for receiving messages
-SEND_PORT = 54321     # Port for sending messages
+RECEIVE_PORT = 12345  # Port for receiving messages directly
+SEND_PORT = 54321     # Port for forwarding messages
 
 # Nodes in the network with static weights
 adjacency_list = {
@@ -21,13 +21,12 @@ def get_local_ip():
 
 def dijkstra(graph, start):
     """Compute shortest paths using Dijkstra's algorithm."""
-    distances = {node: float('inf') for node in graph}  # Initialize distances
-    distances[start] = 0  # Distance to self is 0
+    distances = {node: float('inf') for node in graph}
+    distances[start] = 0
     visited = set()
-    previous_nodes = {node: None for node in graph}  # Track the shortest path
+    previous_nodes = {node: None for node in graph}
 
     while len(visited) < len(graph):
-        # Find the nearest unvisited node
         current_node = None
         current_min_distance = float('inf')
         for node, distance in distances.items():
@@ -36,12 +35,10 @@ def dijkstra(graph, start):
                 current_min_distance = distance
 
         if current_node is None:
-            # All remaining nodes are unreachable
             break
 
         visited.add(current_node)
 
-        # Update distances for neighbors
         for neighbor, weight in graph[current_node].items():
             if neighbor not in visited:
                 new_distance = distances[current_node] + weight
@@ -56,28 +53,13 @@ def get_next_hop(previous_nodes, start, destination):
     current = destination
     while previous_nodes[current] != start:
         current = previous_nodes[current]
-        if current is None:  # No valid path exists
+        if current is None:
             return None
     return current
 
-def get_routing_table(local_ip):
-    """Generate and display the routing table for the local node."""
-    distances, _ = dijkstra(adjacency_list, local_ip)
-    print("\nUpdated Routing Table:")
-    for dest, cost in distances.items():
-        if cost == float('inf'):
-            print(f"Destination: {dest}, Cost: Unreachable")
-        else:
-            print(f"Destination: {dest}, Cost: {cost}")
-    return distances
-
-def handle_connection(conn, addr, local_ip):
+def handle_message(data, local_ip):
     """Handle incoming messages and forward or process them."""
     try:
-        data = conn.recv(1024).decode()
-        if not data:
-            return
-
         packet = json.loads(data)
         source_ip = packet["source_ip"]
         dest_ip = packet["dest_ip"]
@@ -85,11 +67,9 @@ def handle_connection(conn, addr, local_ip):
 
         print(f"Received packet from {source_ip}: {packet}")
 
-        # Check if this computer is the intended receiver
         if dest_ip == local_ip:
             print(f"Message delivered to this computer: {message}")
         else:
-            # Determine the next hop using the routing table
             _, previous_nodes = dijkstra(adjacency_list, local_ip)
             next_hop = get_next_hop(previous_nodes, local_ip, dest_ip)
             if next_hop:
@@ -98,30 +78,33 @@ def handle_connection(conn, addr, local_ip):
             else:
                 print(f"No route to {dest_ip}. Packet dropped.")
     except Exception as e:
-        print(f"Error handling connection: {e}")
-    finally:
-        conn.close()
-
-def forward_message(packet, next_hop):
-    """Forward the message to the next hop."""
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect((next_hop, RECEIVE_PORT))
-            s.sendall(json.dumps(packet).encode())
-            print(f"Packet forwarded to {next_hop}")
-    except Exception as e:
-        print(f"Error forwarding packet: {e}")
+        print(f"Error handling message: {e}")
 
 def start_receiver(local_ip):
-    """Start the server to receive incoming messages."""
+    """Start the server to receive direct messages."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
         server_socket.bind((local_ip, RECEIVE_PORT))
         server_socket.listen(5)
         print(f"Receiver running on {local_ip}:{RECEIVE_PORT}")
 
         while True:
-            conn, addr = server_socket.accept()
-            threading.Thread(target=handle_connection, args=(conn, addr, local_ip)).start()
+            conn, _ = server_socket.accept()
+            with conn:
+                data = conn.recv(1024).decode()
+                handle_message(data, local_ip)
+
+def start_sending_server(local_ip):
+    """Start the server to handle forwarded messages."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+        server_socket.bind((local_ip, SEND_PORT))
+        server_socket.listen(5)
+        print(f"Sender running on {local_ip}:{SEND_PORT}")
+
+        while True:
+            conn, _ = server_socket.accept()
+            with conn:
+                data = conn.recv(1024).decode()
+                handle_message(data, local_ip)
 
 def send_message(local_ip, dest_ip, message):
     """Send a message to the network."""
@@ -135,7 +118,7 @@ def send_message(local_ip, dest_ip, message):
         next_hop = get_next_hop(previous_nodes, local_ip, dest_ip)
         if next_hop:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.connect((next_hop, RECEIVE_PORT))
+                s.connect((next_hop, SEND_PORT))
                 s.sendall(json.dumps(packet).encode())
                 print(f"Message sent to {dest_ip} via {next_hop}: {message}")
         else:
@@ -143,19 +126,29 @@ def send_message(local_ip, dest_ip, message):
     except Exception as e:
         print(f"Error sending message: {e}")
 
+def forward_message(packet, next_hop):
+    """Forward the message to the next hop."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.connect((next_hop, SEND_PORT))
+            s.sendall(json.dumps(packet).encode())
+            print(f"Packet forwarded to {next_hop}")
+    except Exception as e:
+        print(f"Error forwarding packet: {e}")
+
 if __name__ == "__main__":
     local_ip = get_local_ip()
     print(f"Local IP: {local_ip}")
 
-    # Start the receiver server in a separate thread
+    # Start the receiver server and sending server in separate threads
     threading.Thread(target=start_receiver, args=(local_ip,), daemon=True).start()
+    threading.Thread(target=start_sending_server, args=(local_ip,), daemon=True).start()
 
     # Interactive CLI
     while True:
         print("\nOptions:")
         print("1. Send a message")
-        print("2. Show Routing Table")
-        print("3. Exit")
+        print("2. Exit")
         choice = input("Enter your choice: ")
 
         if choice == "1":
@@ -163,8 +156,6 @@ if __name__ == "__main__":
             message = input("Enter the message: ")
             send_message(local_ip, dest_ip, message)
         elif choice == "2":
-            get_routing_table(local_ip)
-        elif choice == "3":
             print("Exiting...")
             break
         else:
