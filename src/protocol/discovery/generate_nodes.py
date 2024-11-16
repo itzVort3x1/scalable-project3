@@ -4,6 +4,8 @@ import subprocess
 import concurrent.futures
 import random
 import json
+import platform
+import tqdm
 
 # Configuration
 network_range = '192.168.185.0/24'  # Modify this to your network's IP range
@@ -11,16 +13,27 @@ specific_port = 12345  # The port to scan
 max_weight = 10  # Maximum weight for edges
 min_weight = 1  # Minimum weight for edges
 
-def get_local_ip():
+# default public ip and port is Google DNS
+def get_local_ip(public_address="8.8.8.8", public_port=80):
     """Retrieve the local IP address."""
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-        s.connect(("8.8.8.8", 80))
-        return s.getsockname()[0]
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect((public_address, public_port))
+            return s.getsockname()[0]
+    except Exception as e:
+        print(f"Error to connect public address {public_address}:{public_port} - {e}")
+        return "127.0.0.1"
 
 # Function to check if an IP is active
 def ping_ip(ip):
     """Ping the IP to check if it is active."""
-    result = subprocess.run(['ping', '-c', '1', '-W', '1', str(ip)], stdout=subprocess.DEVNULL)
+    system_name = platform.system()
+    if system_name == "Windows":
+        result = subprocess.run(['ping', '-n', '1', '-w', '1000', str(ip)], stdout=subprocess.DEVNULL)
+    elif system_name in ("Linux"):   
+        result = subprocess.run(['ping', '-c', '1', '-W', '1', str(ip)], stdout=subprocess.DEVNULL)
+    elif system_name in ("Darwin"):
+        result = subprocess.run(['ping', '-c', '1', '-W', '1000', str(ip)], stdout=subprocess.DEVNULL)
     return ip if result.returncode == 0 else None
 
 # Function to scan for a specific port on an active IP
@@ -47,13 +60,16 @@ def discover_nodes():
 
     # Step 1: Discover active IPs
     print(f"Scanning network for active IPs in range {network_range}...")
+    ip_nums = len(ipaddress.IPv4Network(network_range))
     with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
-        futures = [executor.submit(ping_ip, ip) for ip in ipaddress.IPv4Network(network_range)]
-        for future in concurrent.futures.as_completed(futures):
-            ip = future.result()
-            if ip:
-                print(f"Active IP found: {ip}")
-                active_ips.append(ip)
+        with tqdm(total=ip_nums, desc="Pinging IPs", unit="ip") as progress:
+            futures = [executor.submit(ping_ip, ip) for ip in ipaddress.IPv4Network(network_range)]
+            for future in concurrent.futures.as_completed(futures):
+                ip = future.result()
+                if ip:
+                    print(f"Active IP found: {ip}")
+                    active_ips.append(ip)
+                progress.update(1)
 
     # Step 2: Scan each active IP for the specific port
     print(f"Scanning active IPs for port {specific_port}...")
@@ -66,6 +82,10 @@ def discover_nodes():
                 print(f"Node discovered with port {specific_port} open: {ip}")
                 discovered_nodes.append(ip)
 
+    # print discovered_nodes amount and each ip
+    print(f"Discovered {len(discovered_nodes)} nodes with port {specific_port} open:")
+    for node in discovered_nodes:
+        print(node)
     return discovered_nodes
 
 # Function to build a randomized adjacency list
