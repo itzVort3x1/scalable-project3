@@ -38,7 +38,7 @@ def handle_connection(conn, addr, local_ip):
             print(f"Message delivered to this computer: {message}")
         else:
             # Determine the next hop
-            next_hop = routing_table.get(dest_ip)
+            next_hop = routing_table.get(local_ip)
             if next_hop:
                 # Log the hopping activity
                 print(f"Message hopping: {source_ip} -> {local_ip} -> {next_hop} -> {dest_ip}")
@@ -80,7 +80,7 @@ def send_message(local_ip, dest_ip, message):
     }
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect((dest_ip, RECEIVE_PORT))
+            s.connect((routing_table[local_ip], RECEIVE_PORT))
             s.sendall(json.dumps(packet).encode())
             print(f"Message sent to {dest_ip}: {message}")
     except Exception as e:
