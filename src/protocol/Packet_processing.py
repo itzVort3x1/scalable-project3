@@ -1,5 +1,6 @@
 import socket
 import json
+import protocol.bob2_protocol as Bob2Protocol
 
 class PacketProcessing:
     def __init__(self):
@@ -37,7 +38,8 @@ class PacketProcessing:
             self.handle_packet(packet)
         else:
             print(f"Packet destined for {dest_ip}. Forwarding...")
-            self.forward_packet(packet, dest_ip)
+            print("packet", packet)
+            Bob2Protocol.Bob2Protocol(packet).forward_packet(packet, dest_ip)
 
     def handle_packet(self, packet):
         """Handle packet intended for the local computer."""

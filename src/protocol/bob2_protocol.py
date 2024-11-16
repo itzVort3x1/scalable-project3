@@ -68,6 +68,8 @@ class Bob2Protocol:
 
     def send_message(self, client_socket, message_dict):
         try:
+            print("forwarding message")
+            print("message_dict", message_dict)
             message_json = json.dumps(message_dict)
             encrypted_message = self.handshake.encrypt_message(message_json)
             client_socket.sendall(encrypted_message)
@@ -112,6 +114,13 @@ class Bob2Protocol:
             else:
                 logging.info("Connection closed by the other party.")
                 break
+
+    def forward_packet(self, packet, dest_ip):
+        """Forward the packet to the correct destination."""
+        print(">>>>>>>>>>>>> forwarding packet", packet)
+        print(">>>>>>>>>>>>> forwarding dest_ip", dest_ip)
+        self.send_message(self.client_socket, packet)
+
 
     def send_messages_thread(self, client_socket):
         while True:
