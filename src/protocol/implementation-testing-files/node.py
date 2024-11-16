@@ -8,8 +8,8 @@ SEND_PORT = 54321     # Port for sending messages
 
 # Nodes in the network with static weights
 adjacency_list = {
-    "192.168.185.27": {"192.168.185.239": 1, "192.168.185.50": 8},
-    "192.168.185.239": {"192.168.185.27": 2, "192.168.185.50": 2},
+    "192.168.185.27": {"192.168.185.239": 5, "192.168.185.50": 8},
+    "192.168.185.239": {"192.168.185.27": 5, "192.168.185.50": 3},
     "192.168.185.50": {"192.168.185.27": 8, "192.168.185.239": 3}
 }
 
@@ -21,27 +21,48 @@ def get_local_ip():
 
 def dijkstra(graph, start):
     """Compute shortest paths using Dijkstra's algorithm."""
-    distances = {node: float('inf') for node in graph}
-    distances[start] = 0
+    distances = {node: float('inf') for node in graph}  # Initialize distances
+    distances[start] = 0  # Distance to self is 0
     visited = set()
+    previous_nodes = {node: None for node in graph}  # Track the shortest path
 
-    while visited != set(graph.keys()):
-        # Find the unvisited node with the smallest distance
-        current_node = min((node for node in distances if node not in visited), key=distances.get)
+    while len(visited) < len(graph):
+        # Find the nearest unvisited node
+        current_node = None
+        current_min_distance = float('inf')
+        for node, distance in distances.items():
+            if node not in visited and distance < current_min_distance:
+                current_node = node
+                current_min_distance = distance
+
+        if current_node is None:
+            # All remaining nodes are unreachable
+            break
+
         visited.add(current_node)
 
-        # Update distances to neighbors
+        # Update distances for neighbors
         for neighbor, weight in graph[current_node].items():
             if neighbor not in visited:
                 new_distance = distances[current_node] + weight
                 if new_distance < distances[neighbor]:
                     distances[neighbor] = new_distance
+                    previous_nodes[neighbor] = current_node
 
-    return distances
+    return distances, previous_nodes
+
+def get_next_hop(previous_nodes, start, destination):
+    """Trace back the shortest path to find the next hop."""
+    current = destination
+    while previous_nodes[current] != start:
+        current = previous_nodes[current]
+        if current is None:  # No valid path exists
+            return None
+    return current
 
 def get_routing_table(local_ip):
     """Generate and display the routing table for the local node."""
-    distances = dijkstra(adjacency_list, local_ip)
+    distances, _ = dijkstra(adjacency_list, local_ip)
     print("\nUpdated Routing Table:")
     for dest, cost in distances.items():
         if cost == float('inf'):
@@ -69,10 +90,13 @@ def handle_connection(conn, addr, local_ip):
             print(f"Message delivered to this computer: {message}")
         else:
             # Determine the next hop using the routing table
-            distances = dijkstra(adjacency_list, local_ip)
-            next_hop = min(adjacency_list[local_ip], key=lambda neighbor: distances[neighbor])
-            print(f"Message hopping: {source_ip} -> {local_ip} -> {next_hop} -> {dest_ip}")
-            forward_message(packet, next_hop)
+            _, previous_nodes = dijkstra(adjacency_list, local_ip)
+            next_hop = get_next_hop(previous_nodes, local_ip, dest_ip)
+            if next_hop:
+                print(f"Message hopping: {source_ip} -> {local_ip} -> {next_hop} -> {dest_ip}")
+                forward_message(packet, next_hop)
+            else:
+                print(f"No route to {dest_ip}. Packet dropped.")
     except Exception as e:
         print(f"Error handling connection: {e}")
     finally:
@@ -107,12 +131,15 @@ def send_message(local_ip, dest_ip, message):
         "message": message
     }
     try:
-        distances = dijkstra(adjacency_list, local_ip)
-        next_hop = min(adjacency_list[local_ip], key=lambda neighbor: distances[neighbor])
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect((next_hop, RECEIVE_PORT))
-            s.sendall(json.dumps(packet).encode())
-            print(f"Message sent to {dest_ip}: {message}")
+        _, previous_nodes = dijkstra(adjacency_list, local_ip)
+        next_hop = get_next_hop(previous_nodes, local_ip, dest_ip)
+        if next_hop:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.connect((next_hop, RECEIVE_PORT))
+                s.sendall(json.dumps(packet).encode())
+                print(f"Message sent to {dest_ip} via {next_hop}: {message}")
+        else:
+            print(f"Message could not be delivered to {dest_ip}: No route found.")
     except Exception as e:
         print(f"Error sending message: {e}")
 
