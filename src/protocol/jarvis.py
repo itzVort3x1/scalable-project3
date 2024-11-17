@@ -283,7 +283,6 @@ class Jarvis:
             # Parse JSON if applicable
             try:
                 decrypted_message = json.loads(decrypted_message)
-                self.store_adjacency_list(decrypted_message)
                 print(f"Parsed JSON message: {decrypted_message}")
             except json.JSONDecodeError:
                 print("Decrypted message is not valid JSON.")
