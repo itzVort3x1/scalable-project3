@@ -2,6 +2,7 @@ import socket
 import threading
 import json
 from handshake import Handshake
+import logging
 
 class Jarvis:
     def __init__(self, receive_port=12345, send_port=54321, adjacency_list_file="./discovery/adjacency_list.json"):
@@ -120,6 +121,26 @@ class Jarvis:
                 data = conn.recv(1024).decode()
                 self.handle_message(data)
 
+    def perform_handshake(self, client_socket, is_server):
+        if is_server:
+            logging.info("Server: Generating keys for handshake.")
+            server_private_key, server_public_key = self.handshake.generate_keys()
+            client_socket.sendall(str(server_public_key).encode())
+            logging.info("Server: Sent public key to client.")
+            client_public_key = int(client_socket.recv(1024).decode())
+            logging.info("Server: Received public key from client.")
+            self.handshake.establish_shared_key(client_public_key, server_private_key)
+            logging.info("Server: Shared secret established.")
+        else:
+            logging.info("Client: Generating keys for handshake.")
+            client_private_key, client_public_key = self.handshake.generate_keys()
+            server_public_key = int(client_socket.recv(1024).decode())
+            logging.info("Client: Received public key from server.")
+            client_socket.sendall(str(client_public_key).encode())
+            logging.info("Client: Sent public key to server.")
+            self.handshake.establish_shared_key(server_public_key, client_private_key)
+            logging.info("Client: Shared secret established.")
+
     def send_message(self, dest_ip, message):
         """Send a message to the network."""
         packet = {
@@ -128,6 +149,7 @@ class Jarvis:
             "message": message
         }
         try:
+            self.perform_handshake(client_socket=self.sender_socket, is_server=False)
             _, previous_nodes = self.dijkstra(self.adjacency_list, self.local_ip)
             next_hop = self.get_next_hop(previous_nodes, self.local_ip, dest_ip)
             if next_hop:
