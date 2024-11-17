@@ -13,7 +13,7 @@ specific_port = 12345  # The port to scan
 max_weight = 10  # Maximum weight for edges
 min_weight = 1  # Minimum weight for edges
 
-# default public ip and port is Google DNS
+
 def get_local_ip(public_address="8.8.8.8", public_port=80):
     """Retrieve the local IP address."""
     try:
@@ -21,22 +21,20 @@ def get_local_ip(public_address="8.8.8.8", public_port=80):
             s.connect((public_address, public_port))
             return s.getsockname()[0]
     except Exception as e:
-        print(f"Error to connect public address {public_address}:{public_port} - {e}")
+        print(f"Error connecting to public address {public_address}:{public_port} - {e}")
         return "127.0.0.1"
 
-# Function to check if an IP is active
+
 def ping_ip(ip):
     """Ping the IP to check if it is active."""
     system_name = platform.system()
     if system_name == "Windows":
         result = subprocess.run(['ping', '-n', '1', '-w', '1000', str(ip)], stdout=subprocess.DEVNULL)
-    elif system_name in ("Linux"):   
+    elif system_name in ("Linux", "Darwin"):
         result = subprocess.run(['ping', '-c', '1', '-W', '1', str(ip)], stdout=subprocess.DEVNULL)
-    elif system_name in ("Darwin"):
-        result = subprocess.run(['ping', '-c', '1', '-W', '1000', str(ip)], stdout=subprocess.DEVNULL)
     return ip if result.returncode == 0 else None
 
-# Function to scan for a specific port on an active IP
+
 def scan_port(ip, port):
     """Check if the specific port is open on the given IP."""
     try:
@@ -47,14 +45,14 @@ def scan_port(ip, port):
     except:
         return None
 
-# Function to scan a single IP for the specific port
+
 def scan_ip(ip):
     """Scan the IP for the specific port."""
     if scan_port(ip, specific_port):
         return ip
     return None
 
-# Main function to discover nodes with the specific port open
+
 def discover_nodes():
     active_ips = []
 
@@ -82,32 +80,46 @@ def discover_nodes():
                 print(f"Node discovered with port {specific_port} open: {ip}")
                 discovered_nodes.append(ip)
 
-    # print discovered_nodes amount and each ip
     print(f"Discovered {len(discovered_nodes)} nodes with port {specific_port} open:")
     for node in discovered_nodes:
         print(node)
     return discovered_nodes
 
-# Function to build a randomized adjacency list
+
 def build_adjacency_list(nodes):
     """Create a randomized adjacency list for the discovered nodes, excluding self-references."""
     adjacency_list = {}
     nodes = set(nodes)  # Ensure unique nodes
     for node in nodes:
-        node_str = str(node)  # Convert node to string for compatibility
+        node_str = str(node)
         adjacency_list[node_str] = {}
         for neighbor in nodes:
-            neighbor_str = str(neighbor)  # Convert neighbor to string for compatibility
+            neighbor_str = str(neighbor)
             if node != neighbor:  # Exclude self-references
                 adjacency_list[node_str][neighbor_str] = random.randint(min_weight, max_weight)
     return adjacency_list
 
-# Function to save adjacency list to a file
+
 def save_adjacency_list_to_file(adjacency_list, filename="adjacency_list.json"):
     """Save the adjacency list to a JSON file."""
     with open(filename, "w") as f:
         json.dump(adjacency_list, f, indent=4)
     print(f"Adjacency list saved to {filename}")
+
+
+def share_adjacency_list(nodes, adjacency_list):
+    """Share the adjacency list with all discovered nodes."""
+    serialized_list = json.dumps(adjacency_list).encode()
+
+    for node in nodes:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.connect((node, specific_port))
+                s.sendall(serialized_list)
+                print(f"Shared adjacency list with node {node}")
+        except Exception as e:
+            print(f"Failed to share adjacency list with {node}: {e}")
+
 
 # Main execution
 if __name__ == "__main__":
@@ -128,5 +140,9 @@ if __name__ == "__main__":
 
         # Save the adjacency list to a file
         save_adjacency_list_to_file(adjacency_list)
+
+        # Share the adjacency list with all discovered nodes
+        print("\nSharing adjacency list with discovered nodes...")
+        share_adjacency_list(discovered_nodes, adjacency_list)
     else:
         print("No nodes with the specified port were discovered.")

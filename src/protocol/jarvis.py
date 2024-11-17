@@ -102,8 +102,13 @@ class Jarvis:
         except Exception as e:
             print(f"Error handling message: {e}")
 
+    def store_adjacency_list(self, adjacency_list):
+        """Store the adjacency list locally."""
+        self.adjacency_list = adjacency_list  # Update the in-memory adjacency list
+        print("Adjacency list stored successfully.")
+
     def start_receiver(self):
-        """Start the server to receive direct messages."""
+        """Start the server to receive direct messages or adjacency lists."""
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
             server_socket.bind((self.local_ip, self.receive_port))
             server_socket.listen(5)
@@ -112,8 +117,24 @@ class Jarvis:
             while True:
                 conn, _ = server_socket.accept()
                 with conn:
-                    data = conn.recv(1024).decode()
-                    self.handle_message(data)
+                    data = conn.recv(4096).decode()  # Increased buffer size for larger messages
+                    try:
+                        # Try to parse the received data as JSON
+                        received_data = json.loads(data)
+
+                        # Check if it's an adjacency list (dictionary structure)
+                        if isinstance(received_data, dict):
+                            print("Received adjacency list:")
+                            print(json.dumps(received_data, indent=4))
+
+                            # Save the adjacency list locally
+                            self.store_adjacency_list(received_data)
+                        else:
+                            # If it's not an adjacency list, handle it as a regular message
+                            self.handle_message(data)
+                    except json.JSONDecodeError:
+                        print("Invalid JSON received. Ignoring data.")
+
 
     def start_sending_server(self):
         """Start the server to handle forwarded messages."""
