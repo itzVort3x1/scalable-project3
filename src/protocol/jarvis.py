@@ -1,6 +1,7 @@
 import socket
 import threading
 import json
+import protocol.handshake as Handshake
 
 
 class Jarvis:
@@ -9,6 +10,7 @@ class Jarvis:
         self.SEND_PORT = send_port
         self.local_ip = self.get_local_ip()
         self.adjacency_list = self.load_adjacency_list(adjacency_list_file)
+        self.handshake = Handshake()
 
     @staticmethod
     def get_local_ip():
@@ -128,6 +130,7 @@ class Jarvis:
             if next_hop:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                     s.connect((next_hop, self.SEND_PORT))
+                    packet['message'] = self.handshake.encrypt_message(message)
                     s.sendall(json.dumps(packet).encode())
                     print(f"Message sent to {dest_ip} via {next_hop}: {message}")
             else:
