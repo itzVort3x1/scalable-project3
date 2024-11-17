@@ -1,164 +1,178 @@
 import socket
 import threading
 import json
-
-# Configuration
-RECEIVE_PORT = 12345  # Port for receiving messages directly
-SEND_PORT = 54321     # Port for forwarding messages
-
-# Nodes in the network with static weights
-file_path = "../discovery/adjacency_list.json"
-
-adjacency_list = {}
-    # Open and read the file
-with open(file_path, "r") as file:
-    adjacency_list = json.load(file)
+from cryptography.fernet import Fernet
 
 
-def get_local_ip():
-    """Retrieve the local IP address."""
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-        s.connect(("8.8.8.8", 80))
-        return s.getsockname()[0]
+class NetworkNode:
+    def __init__(self, receive_port=12345, send_port=54321, adjacency_list_file="./discovery/adjacency_list.json"):
+        self.receive_port = receive_port
+        self.send_port = send_port
+        self.local_ip = self.get_local_ip()
+        self.adjacency_list = self.load_adjacency_list(adjacency_list_file)
+        self.encryption_key = Fernet.generate_key()
+        self.cipher = Fernet(self.encryption_key)
 
-def dijkstra(graph, start):
-    """Compute shortest paths using Dijkstra's algorithm."""
-    distances = {node: float('inf') for node in graph}
-    distances[start] = 0
-    visited = set()
-    previous_nodes = {node: None for node in graph}
+    @staticmethod
+    def get_local_ip():
+        """Retrieve the local IP address."""
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            return s.getsockname()[0]
 
-    while len(visited) < len(graph):
-        current_node = None
-        current_min_distance = float('inf')
-        for node, distance in distances.items():
-            if node not in visited and distance < current_min_distance:
-                current_node = node
-                current_min_distance = distance
+    @staticmethod
+    def load_adjacency_list(file_path):
+        """Load the adjacency list from a JSON file."""
+        try:
+            with open(file_path, "r") as file:
+                return json.load(file)
+        except FileNotFoundError:
+            print(f"File not found: {file_path}")
+            return {}
 
-        if current_node is None:
-            break
+    @staticmethod
+    def dijkstra(graph, start):
+        """Compute shortest paths using Dijkstra's algorithm."""
+        distances = {node: float('inf') for node in graph}
+        distances[start] = 0
+        visited = set()
+        previous_nodes = {node: None for node in graph}
 
-        visited.add(current_node)
+        while len(visited) < len(graph):
+            current_node = None
+            current_min_distance = float('inf')
+            for node, distance in distances.items():
+                if node not in visited and distance < current_min_distance:
+                    current_node = node
+                    current_min_distance = distance
 
-        for neighbor, weight in graph[current_node].items():
-            if neighbor not in visited:
-                new_distance = distances[current_node] + weight
-                if new_distance < distances[neighbor]:
-                    distances[neighbor] = new_distance
-                    previous_nodes[neighbor] = current_node
+            if current_node is None:
+                break
 
-    return distances, previous_nodes
+            visited.add(current_node)
 
-def get_next_hop(previous_nodes, start, destination):
-    """Trace back the shortest path to find the next hop."""
-    current = destination
-    while previous_nodes[current] != start:
-        current = previous_nodes[current]
-        if current is None:
-            return None
-    return current
+            for neighbor, weight in graph[current_node].items():
+                if neighbor not in visited:
+                    new_distance = distances[current_node] + weight
+                    if new_distance < distances[neighbor]:
+                        distances[neighbor] = new_distance
+                        previous_nodes[neighbor] = current_node
 
-def handle_message(data, local_ip):
-    """Handle incoming messages and forward or process them."""
-    try:
-        packet = json.loads(data)
-        source_ip = packet["source_ip"]
-        dest_ip = packet["dest_ip"]
-        message = packet["message"]
+        return distances, previous_nodes
 
-        print(f"Received packet from {source_ip}: {packet}")
+    @staticmethod
+    def get_next_hop(previous_nodes, start, destination):
+        """Trace back the shortest path to find the next hop."""
+        current = destination
+        while previous_nodes[current] != start:
+            current = previous_nodes[current]
+            if current is None:
+                return None
+        return current
 
-        if dest_ip == local_ip:
-            print(f"Message delivered to this computer: {message}")
-        else:
-            _, previous_nodes = dijkstra(adjacency_list, local_ip)
-            next_hop = get_next_hop(previous_nodes, local_ip, dest_ip)
-            if next_hop:
-                print(f"Message hopping: {source_ip} -> {local_ip} -> {next_hop} -> {dest_ip}")
-                forward_message(packet, next_hop)
+    def encrypt_message(self, message):
+        """Encrypt a message using the symmetric encryption key."""
+        return self.cipher.encrypt(message.encode()).decode()
+
+    def decrypt_message(self, encrypted_message):
+        """Decrypt a message using the symmetric encryption key."""
+        return self.cipher.decrypt(encrypted_message.encode()).decode()
+
+    def handle_message(self, conn):
+        """Handle incoming messages, decrypt, and process them."""
+        try:
+            data = conn.recv(1024).decode()
+            packet = json.loads(data)
+            source_ip = packet["source_ip"]
+            dest_ip = packet["dest_ip"]
+            encrypted_message = packet["message"]
+
+            # Decrypt the message
+            message = self.decrypt_message(encrypted_message)
+            print(f"Received packet from {source_ip}: {packet}")
+
+            if dest_ip == self.local_ip:
+                print(f"Message delivered to this computer: {message}")
             else:
-                print(f"No route to {dest_ip}. Packet dropped.")
-    except Exception as e:
-        print(f"Error handling message: {e}")
+                _, previous_nodes = self.dijkstra(self.adjacency_list, self.local_ip)
+                next_hop = self.get_next_hop(previous_nodes, self.local_ip, dest_ip)
+                if next_hop:
+                    print(f"Message hopping: {source_ip} -> {self.local_ip} -> {next_hop} -> {dest_ip}")
+                    self.forward_message(packet, next_hop)
+                else:
+                    print(f"No route to {dest_ip}. Packet dropped.")
+        except Exception as e:
+            print(f"Error handling message: {e}")
+        finally:
+            conn.close()
 
-def start_receiver(local_ip):
-    """Start the server to receive direct messages."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-        server_socket.bind((local_ip, RECEIVE_PORT))
-        server_socket.listen(5)
-        print(f"Receiver running on {local_ip}:{RECEIVE_PORT}")
+    def start_receiver(self):
+        """Start the server to receive direct messages."""
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+            server_socket.bind((self.local_ip, self.receive_port))
+            server_socket.listen(5)
+            print(f"Receiver running on {self.local_ip}:{self.receive_port}")
 
-        while True:
-            conn, _ = server_socket.accept()
-            with conn:
-                data = conn.recv(1024).decode()
-                handle_message(data, local_ip)
+            while True:
+                conn, _ = server_socket.accept()
+                threading.Thread(target=self.handle_message, args=(conn,), daemon=True).start()
 
-def start_sending_server(local_ip):
-    """Start the server to handle forwarded messages."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-        server_socket.bind((local_ip, SEND_PORT))
-        server_socket.listen(5)
-        print(f"Sender running on {local_ip}:{SEND_PORT}")
+    def send_message(self, dest_ip, message):
+        """Send a message to the network."""
+        # Encrypt the message
+        encrypted_message = self.encrypt_message(message)
 
-        while True:
-            conn, _ = server_socket.accept()
-            with conn:
-                data = conn.recv(1024).decode()
-                handle_message(data, local_ip)
+        packet = {
+            "source_ip": self.local_ip,
+            "dest_ip": dest_ip,
+            "message": encrypted_message
+        }
+        try:
+            _, previous_nodes = self.dijkstra(self.adjacency_list, self.local_ip)
+            next_hop = self.get_next_hop(previous_nodes, self.local_ip, dest_ip)
+            if next_hop:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.connect((next_hop, self.send_port))
+                    s.sendall(json.dumps(packet).encode())
+                    print(f"Message sent to {dest_ip} via {next_hop}: {message}")
+            else:
+                print(f"Message could not be delivered to {dest_ip}: No route found.")
+        except Exception as e:
+            print(f"Error sending message: {e}")
 
-def send_message(local_ip, dest_ip, message):
-    """Send a message to the network."""
-    packet = {
-        "source_ip": local_ip,
-        "dest_ip": dest_ip,
-        "message": message
-    }
-    try:
-        _, previous_nodes = dijkstra(adjacency_list, local_ip)
-        next_hop = get_next_hop(previous_nodes, local_ip, dest_ip)
-        if next_hop:
+    def forward_message(self, packet, next_hop):
+        """Forward the message to the next hop."""
+        try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.connect((next_hop, SEND_PORT))
+                s.connect((next_hop, self.send_port))
                 s.sendall(json.dumps(packet).encode())
-                print(f"Message sent to {dest_ip} via {next_hop}: {message}")
-        else:
-            print(f"Message could not be delivered to {dest_ip}: No route found.")
-    except Exception as e:
-        print(f"Error sending message: {e}")
+                print(f"Packet forwarded to {next_hop}")
+        except Exception as e:
+            print(f"Error forwarding packet: {e}")
 
-def forward_message(packet, next_hop):
-    """Forward the message to the next hop."""
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect((next_hop, SEND_PORT))
-            s.sendall(json.dumps(packet).encode())
-            print(f"Packet forwarded to {next_hop}")
-    except Exception as e:
-        print(f"Error forwarding packet: {e}")
+    def start(self):
+        """Start the receiver server in a separate thread."""
+        threading.Thread(target=self.start_receiver, daemon=True).start()
+
+        # Interactive CLI
+        while True:
+            print("\nOptions:")
+            print("1. Send a message")
+            print("2. Exit")
+            choice = input("Enter your choice: ")
+
+            if choice == "1":
+                dest_ip = input("Enter the destination IP: ")
+                message = input("Enter the message: ")
+                self.send_message(dest_ip, message)
+            elif choice == "2":
+                print("Exiting...")
+                break
+            else:
+                print("Invalid choice.")
+
 
 if __name__ == "__main__":
-    local_ip = get_local_ip()
-    print(f"Local IP: {local_ip}")
-
-    # Start the receiver server and sending server in separate threads
-    threading.Thread(target=start_receiver, args=(local_ip,), daemon=True).start()
-    threading.Thread(target=start_sending_server, args=(local_ip,), daemon=True).start()
-
-    # Interactive CLI
-    while True:
-        print("\nOptions:")
-        print("1. Send a message")
-        print("2. Exit")
-        choice = input("Enter your choice: ")
-
-        if choice == "1":
-            dest_ip = input("Enter the destination IP: ")
-            message = input("Enter the message: ")
-            send_message(local_ip, dest_ip, message)
-        elif choice == "2":
-            print("Exiting...")
-            break
-        else:
-            print("Invalid choice.")
+    node = NetworkNode()
+    print(f"Local IP: {node.local_ip}")
+    node.start()

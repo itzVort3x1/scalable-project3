@@ -1,19 +1,17 @@
 import socket
 import threading
 import json
-from handshake import Handshake
-import logging
-import random
+from cryptography.fernet import Fernet
+
 
 class Jarvis:
-    def __init__(self, receive_port=12345, send_port=54321, adjacency_list_file="./discovery/adjacency_list.json"):
-        self.RECEIVE_PORT = receive_port
-        self.SEND_PORT = send_port
+    def __init__(self, receive_port=12345, send_port=54321, adjacency_list_file="../discovery/adjacency_list.json"):
+        self.receive_port = receive_port
+        self.send_port = send_port
         self.local_ip = self.get_local_ip()
         self.adjacency_list = self.load_adjacency_list(adjacency_list_file)
-        self.handshake = Handshake()
-        self.receiver_socket = None  # Receiver server socket
-        self.sender_socket = None    # Sender server socket
+        self.encryption_key = Fernet.generate_key()
+        self.cipher = Fernet(self.encryption_key)
 
     @staticmethod
     def get_local_ip():
@@ -62,7 +60,8 @@ class Jarvis:
 
         return distances, previous_nodes
 
-    def get_next_hop(self, previous_nodes, start, destination):
+    @staticmethod
+    def get_next_hop(previous_nodes, start, destination):
         """Trace back the shortest path to find the next hop."""
         current = destination
         while previous_nodes[current] != start:
@@ -71,19 +70,25 @@ class Jarvis:
                 return None
         return current
 
-    def handle_message(self, conn):
-        """Handle incoming messages, perform handshake, and process or forward them."""
-        try:
-            # Perform the handshake
-            self.perform_handshake(socket_connection=conn)
+    def encrypt_message(self, message):
+        """Encrypt a message using the symmetric encryption key."""
+        return self.cipher.encrypt(message.encode()).decode()
 
-            # Receive and process the message after the handshake
+    def decrypt_message(self, encrypted_message):
+        """Decrypt a message using the symmetric encryption key."""
+        return self.cipher.decrypt(encrypted_message.encode()).decode()
+
+    def handle_message(self, conn):
+        """Handle incoming messages, decrypt, and process them."""
+        try:
             data = conn.recv(1024).decode()
             packet = json.loads(data)
             source_ip = packet["source_ip"]
             dest_ip = packet["dest_ip"]
-            message = self.handshake.decrypt_message(packet["message"])  # Decrypt the message
+            encrypted_message = packet["message"]
 
+            # Decrypt the message
+            message = self.decrypt_message(encrypted_message)
             print(f"Received packet from {source_ip}: {packet}")
 
             if dest_ip == self.local_ip:
@@ -101,90 +106,33 @@ class Jarvis:
         finally:
             conn.close()
 
-
     def start_receiver(self):
         """Start the server to receive direct messages."""
-        if self.receiver_socket is None:
-            self.receiver_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.receiver_socket.bind((self.local_ip, self.RECEIVE_PORT))
-            self.receiver_socket.listen(5)
-            print(f"Receiver running on {self.local_ip}:{self.RECEIVE_PORT}")
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+            server_socket.bind((self.local_ip, self.receive_port))
+            server_socket.listen(5)
+            print(f"Receiver running on {self.local_ip}:{self.receive_port}")
 
-        while True:
-            conn, _ = self.receiver_socket.accept()
-            threading.Thread(target=self.handle_message, args=(conn,), daemon=True).start()
-
-
-    def start_sending_server(self):
-        """Start the server to handle forwarded messages."""
-        if self.sender_socket is None:
-            self.sender_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sender_socket.bind((self.local_ip, self.SEND_PORT))
-            self.sender_socket.listen(5)
-            print(f"Sender running on {self.local_ip}:{self.SEND_PORT}")
-
-        while True:
-            conn, _ = self.sender_socket.accept()
-            with conn:
-                data = conn.recv(1024).decode()
-                self.handle_message(data)
-
-    def perform_handshake(self, socket_connection, is_server=False):
-        """Randomly assign roles for handshake and establish a shared secret."""
-        try:
-            # Randomly decide whether this instance is the server or client
-            is_server = is_server
-
-            if is_server:
-                logging.info("This node is acting as the server for the handshake.")
-                server_private_key, server_public_key = self.handshake.generate_keys()
-                print(f"Server private key: {server_private_key}")
-                print(f"Server public key: {server_public_key}")
-                socket_connection.sendall(str(server_public_key).encode())  # Send public key to peer
-                logging.info("Server: Sent public key.")
-                client_public_key = int(socket_connection.recv(1024).decode())  # Receive peer's public key
-                logging.info("Server: Received public key from client.")
-                self.handshake.establish_shared_key(client_public_key, server_private_key)
-                logging.info("Server: Shared secret established.")
-            else:
-                logging.info("This node is acting as the client for the handshake.")
-                client_private_key, client_public_key = self.handshake.generate_keys()
-                server_public_key = int(socket_connection.recv(1024).decode())  # Receive peer's public key
-                logging.info("Client: Received public key from server.")
-                socket_connection.sendall(str(client_public_key).encode())  # Send public key to peer
-                logging.info("Client: Sent public key.")
-                self.handshake.establish_shared_key(server_public_key, client_private_key)
-                logging.info("Client: Shared secret established.")
-        except Exception as e:
-            logging.error(f"Handshake failed: {e}")
-            raise e
+            while True:
+                conn, _ = server_socket.accept()
+                threading.Thread(target=self.handle_message, args=(conn,), daemon=True).start()
 
     def send_message(self, dest_ip, message):
-        """Send a message to the network, performing a handshake first."""
+        """Send a message to the network."""
+        # Encrypt the message
+        encrypted_message = self.encrypt_message(message)
+
+        packet = {
+            "source_ip": self.local_ip,
+            "dest_ip": dest_ip,
+            "message": encrypted_message
+        }
         try:
-            # Find the next hop for the destination
             _, previous_nodes = self.dijkstra(self.adjacency_list, self.local_ip)
             next_hop = self.get_next_hop(previous_nodes, self.local_ip, dest_ip)
-            
             if next_hop:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    # Connect to the next hop
-                    s.connect((next_hop, self.SEND_PORT))
-                    
-                    # Perform the handshake
-                    self.perform_handshake(socket_connection=s)
-                    
-                    # Encrypt the message
-                    encrypted_message = self.handshake.encrypt_message(message)
-                    
-                    # Prepare the packet
-                    packet = {
-                        "source_ip": self.local_ip,
-                        "dest_ip": dest_ip,
-                        "message": encrypted_message
-                    }
-                    
-                    # Send the packet
+                    s.connect((next_hop, self.send_port))
                     s.sendall(json.dumps(packet).encode())
                     print(f"Message sent to {dest_ip} via {next_hop}: {message}")
             else:
@@ -192,21 +140,19 @@ class Jarvis:
         except Exception as e:
             print(f"Error sending message: {e}")
 
-
     def forward_message(self, packet, next_hop):
         """Forward the message to the next hop."""
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.connect((next_hop, self.SEND_PORT))
+                s.connect((next_hop, self.send_port))
                 s.sendall(json.dumps(packet).encode())
                 print(f"Packet forwarded to {next_hop}")
         except Exception as e:
             print(f"Error forwarding packet: {e}")
 
     def start(self):
-        """Start the receiver and sender servers in separate threads."""
+        """Start the receiver server in a separate thread."""
         threading.Thread(target=self.start_receiver, daemon=True).start()
-        threading.Thread(target=self.start_sending_server, daemon=True).start()
 
         # Interactive CLI
         while True:
@@ -227,6 +173,6 @@ class Jarvis:
 
 
 if __name__ == "__main__":
-    jarvis = Jarvis()
-    print(f"Local IP: {jarvis.local_ip}")
-    jarvis.start()
+    node = Jarvis()
+    print(f"Local IP: {node.local_ip}")
+    node.start()
