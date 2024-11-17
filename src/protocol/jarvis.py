@@ -72,10 +72,10 @@ class Jarvis:
         return current
 
     def handle_message(self, conn):
-        """Handle incoming messages and forward or process them, with handshake."""
+        """Handle incoming messages, perform handshake, and process or forward them."""
         try:
             # Perform the handshake
-            self.perform_handshake(socket_connection=conn, is_server=False)
+            self.perform_handshake(socket_connection=conn)
 
             # Receive and process the message after the handshake
             data = conn.recv(1024).decode()
@@ -98,6 +98,9 @@ class Jarvis:
                     print(f"No route to {dest_ip}. Packet dropped.")
         except Exception as e:
             print(f"Error handling message: {e}")
+        finally:
+            conn.close()
+
 
     def start_receiver(self):
         """Start the server to receive direct messages."""
@@ -109,9 +112,8 @@ class Jarvis:
 
         while True:
             conn, _ = self.receiver_socket.accept()
-            with conn:
-                data = conn.recv(1024).decode()
-                self.handle_message(data)
+            threading.Thread(target=self.handle_message, args=(conn,), daemon=True).start()
+
 
     def start_sending_server(self):
         """Start the server to handle forwarded messages."""
@@ -158,26 +160,38 @@ class Jarvis:
             raise e
 
     def send_message(self, dest_ip, message):
-        """Send a message to the network."""
+        """Send a message to the network, performing a handshake first."""
         try:
+            # Find the next hop for the destination
             _, previous_nodes = self.dijkstra(self.adjacency_list, self.local_ip)
             next_hop = self.get_next_hop(previous_nodes, self.local_ip, dest_ip)
+            
             if next_hop:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    # Connect to the next hop
                     s.connect((next_hop, self.SEND_PORT))
-                    self.perform_handshake(socket_connection=s, is_server=True)  # Perform handshake
+                    
+                    # Perform the handshake
+                    self.perform_handshake(socket_connection=s)
+                    
+                    # Encrypt the message
                     encrypted_message = self.handshake.encrypt_message(message)
+                    
+                    # Prepare the packet
                     packet = {
                         "source_ip": self.local_ip,
                         "dest_ip": dest_ip,
                         "message": encrypted_message
                     }
+                    
+                    # Send the packet
                     s.sendall(json.dumps(packet).encode())
                     print(f"Message sent to {dest_ip} via {next_hop}: {message}")
             else:
                 print(f"Message could not be delivered to {dest_ip}: No route found.")
         except Exception as e:
             print(f"Error sending message: {e}")
+
 
     def forward_message(self, packet, next_hop):
         """Forward the message to the next hop."""
