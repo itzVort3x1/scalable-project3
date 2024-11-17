@@ -113,7 +113,7 @@ def share_adjacency_list(nodes, adjacency_list):
 
     for node in nodes:
         try:
-            full_message = jarvis.build_message(str(node), str(adjacency_list), 'routing-info')
+            full_message = jarvis.build_message(str(node), str(json.dumps(adjacency_list)), 'routing-info')
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.connect((str(node), specific_port))
                 s.sendall(full_message)
