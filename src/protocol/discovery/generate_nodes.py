@@ -136,7 +136,7 @@ if __name__ == "__main__":
 
     # Discover nodes
     discovered_nodes = discover_nodes(network_range)
-    discovered_nodes.append(local_ip)
+    #discovered_nodes.append(local_ip)
 
     # Build adjacency list if nodes are discovered
     if discovered_nodes:
