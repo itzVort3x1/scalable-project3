@@ -8,11 +8,9 @@ import platform
 from tqdm import tqdm
 
 # Configuration
-network_range = '10.30.11.0/24'  # Modify this to your network's IP range
-specific_port = 12345  # The port to scan
+specific_port = 33000  # The port to scan
 max_weight = 10  # Maximum weight for edges
 min_weight = 1  # Minimum weight for edges
-
 
 def get_local_ip(public_address="8.8.8.8", public_port=80):
     """Retrieve the local IP address."""
@@ -53,7 +51,7 @@ def scan_ip(ip):
     return None
 
 
-def discover_nodes():
+def discover_nodes(network_range):
     active_ips = []
 
     # Step 1: Discover active IPs
@@ -109,8 +107,6 @@ def save_adjacency_list_to_file(adjacency_list, filename="adjacency_list.json"):
 
 def share_adjacency_list(nodes, adjacency_list):
     """Share the adjacency list with all discovered nodes."""
-
-
     local_ip = get_local_ip()
 
     for node in nodes:
@@ -135,8 +131,11 @@ if __name__ == "__main__":
     local_ip = get_local_ip()
     print(f"Local IP: {local_ip}")
 
+    # Ask the user for the network range
+    network_range = input("Enter the network range (e.g., 192.168.1.0/24): ").strip()
+
     # Discover nodes
-    discovered_nodes = discover_nodes()
+    discovered_nodes = discover_nodes(network_range)
     discovered_nodes.append(local_ip)
 
     # Build adjacency list if nodes are discovered
