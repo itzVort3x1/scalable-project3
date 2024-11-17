@@ -1,7 +1,7 @@
 import socket
 import threading
 import json
-import protocol.handshake as Handshake
+from protocol.handshake import Handshake
 
 
 class Jarvis:
