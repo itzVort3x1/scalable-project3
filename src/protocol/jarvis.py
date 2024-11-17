@@ -180,8 +180,3 @@ class Jarvis:
             else:
                 print("Invalid choice.")
 
-
-if __name__ == "__main__":
-    node = Jarvis()
-    print(f"Local IP: {node.local_ip}")
-    node.start()
