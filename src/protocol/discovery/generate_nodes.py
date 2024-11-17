@@ -109,12 +109,21 @@ def save_adjacency_list_to_file(adjacency_list, filename="adjacency_list.json"):
 
 def share_adjacency_list(nodes, adjacency_list):
     """Share the adjacency list with all discovered nodes."""
-    serialized_list = json.dumps(adjacency_list).encode()
+
+
+    local_ip = get_local_ip()
 
     for node in nodes:
         try:
+            packet = {
+                "source_ip": local_ip,
+                "dest_ip": str(node),
+                "message_type": "routing-info",
+                "message": adjacency_list
+            }
+            serialized_list = json.dumps(packet).encode()
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.connect((node, specific_port))
+                s.connect((str(node), specific_port))
                 s.sendall(serialized_list)
                 print(f"Shared adjacency list with node {node}")
         except Exception as e:

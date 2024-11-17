@@ -105,6 +105,8 @@ class Jarvis:
     def store_adjacency_list(self, adjacency_list):
         """Store the adjacency list locally."""
         self.adjacency_list = adjacency_list  # Update the in-memory adjacency list
+        with open("adjacency_list.json", "w") as file:
+            json.dump(adjacency_list, file, indent=4)
         print("Adjacency list stored successfully.")
 
     def start_receiver(self):
@@ -127,8 +129,10 @@ class Jarvis:
                             print("Received adjacency list:")
                             print(json.dumps(received_data, indent=4))
 
-                            # Save the adjacency list locally
-                            self.store_adjacency_list(received_data)
+                            if received_data['message_type'] == 'routing-info':
+                                self.store_adjacency_list(received_data['message'])
+                            else:
+                                print("Invalid message type. Ignoring data.")
                         else:
                             # If it's not an adjacency list, handle it as a regular message
                             self.handle_message(data)
