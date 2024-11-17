@@ -9,7 +9,7 @@ from tqdm import tqdm
 from jarvis import Jarvis
 
 # Configuration
-specific_port = 33000  # The port to scan
+specific_port = 12345  # The port to scan
 max_weight = 10  # Maximum weight for edges
 min_weight = 1  # Minimum weight for edges
 
