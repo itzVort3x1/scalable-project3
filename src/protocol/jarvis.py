@@ -105,7 +105,7 @@ class Jarvis:
     def store_adjacency_list(self, adjacency_list):
         """Store the adjacency list locally."""
         self.adjacency_list = adjacency_list  # Update the in-memory adjacency list
-        with open("adjacency_list.json", "w") as file:
+        with open("./discovery/adjacency_list.json", "w") as file:
             json.dump(adjacency_list, file, indent=4)
         print("Adjacency list stored successfully.")
 
