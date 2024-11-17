@@ -1,8 +1,7 @@
 import socket
 import threading
 import json
-from protocol.handshake import Handshake
-
+from handshake import Handshake
 
 class Jarvis:
     def __init__(self, receive_port=12345, send_port=54321, adjacency_list_file="./discovery/adjacency_list.json"):
