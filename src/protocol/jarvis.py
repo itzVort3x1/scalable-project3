@@ -3,6 +3,7 @@ import threading
 import json
 import zlib
 import struct
+import time
 
 
 class Jarvis:
@@ -86,11 +87,20 @@ class Jarvis:
 
     def build_message(self, dest_ip, message):
         """Build a structured message with header, length, and checksum."""
+        print("Building the message...")
+        time.sleep(2)  # Simulate processing delay
+
         message_content = self.encrypt_message(message)
+        print(f"Encrypted message content: {message_content}")
+
         checksum = self.calculate_checksum(message_content)
+        print(f"Calculated checksum: {checksum}")
+
         checksum_bytes = struct.pack('!I', checksum)
 
         message_length = len(message_content)
+        print(f"Message length: {message_length} bytes")
+
         length_bytes = message_length.to_bytes(5, byteorder='big')
 
         header = json.dumps({
@@ -98,22 +108,36 @@ class Jarvis:
             "dest_ip": dest_ip,
         }).encode('utf-8')
 
-        return header + length_bytes + checksum_bytes + message_content.encode('utf-8')
+        full_message = header + length_bytes + checksum_bytes + message_content.encode('utf-8')
+        print(f"Full message: {full_message}")
+
+        return full_message
 
     def parse_message(self, raw_data):
         """Parse and validate a received message."""
+        print("Parsing the message...")
+        time.sleep(2)  # Simulate processing delay
+
         header_length = raw_data.find(b'}') + 1
         header = json.loads(raw_data[:header_length].decode('utf-8'))
+        print(f"Parsed header: {header}")
 
         message_length = int.from_bytes(raw_data[header_length:header_length + 5], byteorder='big')
-        expected_checksum = struct.unpack('!I', raw_data[header_length + 5:header_length + 9])[0]
-        message_content = raw_data[header_length + 9:header_length + 9 + message_length].decode('utf-8')
+        print(f"Message length from header: {message_length} bytes")
 
+        expected_checksum = struct.unpack('!I', raw_data[header_length + 5:header_length + 9])[0]
+        print(f"Expected checksum: {expected_checksum}")
+
+        message_content = raw_data[header_length + 9:header_length + 9 + message_length].decode('utf-8')
         actual_checksum = zlib.crc32(message_content.encode('utf-8'))
+
         if expected_checksum != actual_checksum:
             raise ValueError("Checksum verification failed")
 
-        header["message_content"] = self.decrypt_message(message_content)
+        decrypted_message = self.decrypt_message(message_content)
+        print(f"Decrypted message content: {decrypted_message}")
+
+        header["message_content"] = decrypted_message
         return header
 
     def handle_message(self, data):
@@ -126,6 +150,9 @@ class Jarvis:
 
     def send_message(self, dest_ip, message):
         """Send a structured message to the network."""
+        print("Preparing to send message...")
+        time.sleep(2)  # Simulate processing delay
+
         full_message = self.build_message(dest_ip, message)
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -137,6 +164,9 @@ class Jarvis:
 
     def start_receiver(self):
         """Start the server to receive direct messages."""
+        print("Starting receiver server...")
+        time.sleep(2)  # Simulate processing delay
+
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
             server_socket.bind((self.local_ip, self.receive_port))
             server_socket.listen(5)
@@ -146,6 +176,7 @@ class Jarvis:
                 conn, _ = server_socket.accept()
                 with conn:
                     data = conn.recv(4096)
+                    print(f"Raw data received: {data}")
                     self.handle_message(data)
 
     def start(self):
