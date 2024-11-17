@@ -1,17 +1,14 @@
 import socket
 import threading
 import json
-from cryptography.fernet import Fernet
 
 
-class Jarvis:
-    def __init__(self, receive_port=12345, send_port=54321, adjacency_list_file="../discovery/adjacency_list.json"):
+class NetworkNode:
+    def __init__(self, receive_port=12345, send_port=54321, adjacency_list_file="./discovery/adjacency_list.json"):
         self.receive_port = receive_port
         self.send_port = send_port
         self.local_ip = self.get_local_ip()
         self.adjacency_list = self.load_adjacency_list(adjacency_list_file)
-        self.encryption_key = Fernet.generate_key()
-        self.cipher = Fernet(self.encryption_key)
 
     @staticmethod
     def get_local_ip():
@@ -70,25 +67,14 @@ class Jarvis:
                 return None
         return current
 
-    def encrypt_message(self, message):
-        """Encrypt a message using the symmetric encryption key."""
-        return self.cipher.encrypt(message.encode()).decode()
-
-    def decrypt_message(self, encrypted_message):
-        """Decrypt a message using the symmetric encryption key."""
-        return self.cipher.decrypt(encrypted_message.encode()).decode()
-
-    def handle_message(self, conn):
-        """Handle incoming messages, decrypt, and process them."""
+    def handle_message(self, data):
+        """Handle incoming messages and forward or process them."""
         try:
-            data = conn.recv(1024).decode()
             packet = json.loads(data)
             source_ip = packet["source_ip"]
             dest_ip = packet["dest_ip"]
-            encrypted_message = packet["message"]
+            message = packet["message"]
 
-            # Decrypt the message
-            message = self.decrypt_message(encrypted_message)
             print(f"Received packet from {source_ip}: {packet}")
 
             if dest_ip == self.local_ip:
@@ -103,8 +89,6 @@ class Jarvis:
                     print(f"No route to {dest_ip}. Packet dropped.")
         except Exception as e:
             print(f"Error handling message: {e}")
-        finally:
-            conn.close()
 
     def start_receiver(self):
         """Start the server to receive direct messages."""
@@ -115,17 +99,29 @@ class Jarvis:
 
             while True:
                 conn, _ = server_socket.accept()
-                threading.Thread(target=self.handle_message, args=(conn,), daemon=True).start()
+                with conn:
+                    data = conn.recv(1024).decode()
+                    self.handle_message(data)
+
+    def start_sending_server(self):
+        """Start the server to handle forwarded messages."""
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+            server_socket.bind((self.local_ip, self.send_port))
+            server_socket.listen(5)
+            print(f"Sender running on {self.local_ip}:{self.send_port}")
+
+            while True:
+                conn, _ = server_socket.accept()
+                with conn:
+                    data = conn.recv(1024).decode()
+                    self.handle_message(data)
 
     def send_message(self, dest_ip, message):
         """Send a message to the network."""
-        # Encrypt the message
-        encrypted_message = self.encrypt_message(message)
-
         packet = {
             "source_ip": self.local_ip,
             "dest_ip": dest_ip,
-            "message": encrypted_message
+            "message": message
         }
         try:
             _, previous_nodes = self.dijkstra(self.adjacency_list, self.local_ip)
@@ -151,8 +147,9 @@ class Jarvis:
             print(f"Error forwarding packet: {e}")
 
     def start(self):
-        """Start the receiver server in a separate thread."""
+        """Start the receiver server and sender server in separate threads."""
         threading.Thread(target=self.start_receiver, daemon=True).start()
+        threading.Thread(target=self.start_sending_server, daemon=True).start()
 
         # Interactive CLI
         while True:
@@ -173,6 +170,6 @@ class Jarvis:
 
 
 if __name__ == "__main__":
-    node = Jarvis()
+    node = NetworkNode()
     print(f"Local IP: {node.local_ip}")
     node.start()
