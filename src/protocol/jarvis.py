@@ -4,6 +4,9 @@ import json
 import zlib
 import struct
 import time
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import serialization
 
 
 class Jarvis:
@@ -71,117 +74,144 @@ class Jarvis:
                 return None
         return current
 
-    def decrypt_message(self, encrypted_message):
-        """Decrypt a message using a simple Caesar cipher."""
-        decrypted = ''.join(chr((ord(char) - self.encryption_key) % 256) for char in encrypted_message)
-        return decrypted
+    def decrypt_message(self, encrypted_message, private_key_file="private_key.pem"):
+        """
+        Decrypt a message using RSA private key.
+        Args:
+            encrypted_message (bytes): The encrypted message.
+            private_key_file (str): Path to the RSA private key file.
+        Returns:
+            str: The decrypted plain text message.
+        """
+        try:
+            with open(private_key_file, "rb") as f:
+                private_key = serialization.load_pem_private_key(f.read(), password=None)
 
-    def encrypt_message(self, message):
-        """Encrypt a message using a simple Caesar cipher."""
-        encrypted = ''.join(chr((ord(char) + self.encryption_key) % 256) for char in message)
-        return encrypted
+            # Decrypt the message using the private key
+            decrypted = private_key.decrypt(
+                encrypted_message,
+                padding.OAEP(
+                    mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                    algorithm=hashes.SHA256(),
+                    label=None
+                )
+            )
+            return decrypted.decode('utf-8')
+        except Exception as e:
+            print(f"Decryption failed: {e}")
+            raise
+
+    def encrypt_message(self, message, public_key_file="public_key.pem"):
+        """
+        Encrypt a message using RSA public key.
+        Args:
+            message (str): The plain text message to encrypt.
+            public_key_file (str): Path to the RSA public key file.
+        Returns:
+            bytes: The encrypted message in bytes.
+        """
+        try:
+            with open(public_key_file, "rb") as f:
+                public_key = serialization.load_pem_public_key(f.read())
+
+            # Encrypt the message using the public key
+            encrypted = public_key.encrypt(
+                message.encode('utf-8'),
+                padding.OAEP(
+                    mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                    algorithm=hashes.SHA256(),
+                    label=None
+                )
+            )
+            return encrypted
+        except Exception as e:
+            print(f"Encryption failed: {e}")
+            raise
 
     def calculate_checksum(self, message_content):
         """Calculate CRC checksum for the message content."""
         return zlib.crc32(message_content.encode('utf-8'))
 
     def build_message(self, dest_ip, message, message_type="data"):
-        """Build a structured message with header, length, and checksum."""
+        """
+        Build a structured message with RSA encryption, header, and checksum.
+        Args:
+            dest_ip (str): Destination IP address.
+            message (str): Plain text message to send.
+            message_type (str): Type of the message (default is 'data').
+        Returns:
+            bytes: The complete message with header and encrypted content.
+        """
         try:
-            print("Building the message...")
+            # Encrypt the message
+            encrypted_message = self.encrypt_message(message)
+            print(f"Encrypted message: {encrypted_message}")
 
-            # Encrypt the message content
-            message_content = self.encrypt_message(message)
-            print(f"Encrypted message content: {message_content}")
+            # Calculate checksum of the encrypted message
+            checksum = self.calculate_checksum(encrypted_message.hex())
+            print(f"Checksum: {checksum}")
 
-            # Calculate checksum
-            checksum = self.calculate_checksum(message_content)
-            print(f"Calculated checksum (build): {checksum}")
-
-            # Pack checksum into 4 bytes
+            # Pack checksum as 4 bytes
             checksum_bytes = struct.pack('!I', checksum)
 
             # Determine message length
-            message_length = len(message_content.encode('latin1'))  # Use latin1 to ensure consistent byte length
-            print(f"Message length: {message_length} bytes")
-
-            # Pack message length into 5 bytes
+            message_length = len(encrypted_message)
             length_bytes = message_length.to_bytes(5, byteorder='big')
 
-            # Create the header with JSON and encode it as UTF-8
+            # Create the header
             header = json.dumps({
                 "source_ip": self.local_ip,
                 "dest_ip": dest_ip,
                 "message_type": message_type,
-                "hop_count": 0  # Initial hop count is 0
+                "hop_count": 0
             }).encode('utf-8')
 
-            # Concatenate all parts to form the full message
-            full_message = header + length_bytes + checksum_bytes + message_content.encode('latin1')
-            print(f"Full message constructed: {full_message}")
-
+            # Combine header, length, checksum, and encrypted content
+            full_message = header + length_bytes + checksum_bytes + encrypted_message
+            print(f"Constructed message: {full_message}")
             return full_message
-
         except Exception as e:
-            print(f"Error building message: {e}")
-            raise ValueError("Failed to build the message.")
-
-
+            print(f"Failed to build message: {e}")
+            raise
 
     def parse_message(self, raw_data):
-        """Parse and validate a received message."""
+        """
+        Parse and validate a received message with RSA decryption.
+        Args:
+            raw_data (bytes): The raw message received.
+        Returns:
+            dict: The parsed message including the decrypted content.
+        """
         try:
-            print("Parsing the message...")
-
-            # Extract and decode the header
+            # Extract header
             header_length = raw_data.find(b'}') + 1
-            if header_length == 0:
-                raise ValueError("Header not properly formatted.")
-            
             header = json.loads(raw_data[:header_length].decode('utf-8'))
             print(f"Parsed header: {header}")
 
             # Extract message length
             message_length = int.from_bytes(raw_data[header_length:header_length + 5], byteorder='big')
-            print(f"Message length from header: {message_length} bytes")
-
-            # Ensure raw_data is long enough
-            if len(raw_data) < header_length + 9 + message_length:
-                raise ValueError("Incomplete raw data received.")
 
             # Extract checksum
             expected_checksum = struct.unpack('!I', raw_data[header_length + 5:header_length + 9])[0]
-            print(f"Expected checksum (parse): {expected_checksum}")
 
-            # Extract and decode message content
-            encrypted_content = raw_data[header_length + 9:header_length + 9 + message_length].decode('latin1')
-            print(f"Encrypted content (parse): {encrypted_content}")
+            # Extract encrypted content
+            encrypted_content = raw_data[header_length + 9:header_length + 9 + message_length]
 
-            # Recalculate checksum
-            actual_checksum = zlib.crc32(encrypted_content.encode('latin1'))
-            print(f"Actual checksum (parse): {actual_checksum}")
-
+            # Validate checksum
+            actual_checksum = zlib.crc32(encrypted_content.hex().encode('utf-8'))
             if expected_checksum != actual_checksum:
-                raise ValueError("Checksum verification failed.")
+                raise ValueError("Checksum mismatch!")
 
             # Decrypt the message content
             decrypted_message = self.decrypt_message(encrypted_content)
-            print(f"Decrypted message content: {decrypted_message}")
+            print(f"Decrypted message: {decrypted_message}")
 
             # Attach the decrypted message to the header
             header["message_content"] = decrypted_message
             return header
-
-        except json.JSONDecodeError as e:
-            print(f"Error decoding header: {e}")
-            raise ValueError("Invalid JSON in header.")
-        except UnicodeDecodeError as e:
-            print(f"Error decoding message content: {e}")
-            raise ValueError("Message content is not valid UTF-8.")
         except Exception as e:
-            print(f"Unexpected error while parsing message: {e}")
+            print(f"Failed to parse message: {e}")
             raise
-
 
     def handle_message(self, data):
         """Handle incoming messages."""
