@@ -71,13 +71,18 @@ class Jarvis:
                 return None
         return current
 
-    def handle_message(self, data):
-        """Handle incoming messages and forward or process them."""
+    def handle_message(self, conn):
+        """Handle incoming messages and forward or process them, with handshake."""
         try:
+            # Perform the handshake
+            self.perform_handshake(socket_connection=conn)
+
+            # Receive and process the message after the handshake
+            data = conn.recv(1024).decode()
             packet = json.loads(data)
             source_ip = packet["source_ip"]
             dest_ip = packet["dest_ip"]
-            message = packet["message"]
+            message = self.handshake.decrypt_message(packet["message"])  # Decrypt the message
 
             print(f"Received packet from {source_ip}: {packet}")
 
@@ -126,11 +131,13 @@ class Jarvis:
         """Randomly assign roles for handshake and establish a shared secret."""
         try:
             # Randomly decide whether this instance is the server or client
-            is_server = random.choice([True, False])
+            is_server = True
 
             if is_server:
                 logging.info("This node is acting as the server for the handshake.")
                 server_private_key, server_public_key = self.handshake.generate_keys()
+                print(f"Server private key: {server_private_key}")
+                print(f"Server public key: {server_public_key}")
                 socket_connection.sendall(str(server_public_key).encode())  # Send public key to peer
                 logging.info("Server: Sent public key.")
                 client_public_key = int(socket_connection.recv(1024).decode())  # Receive peer's public key
