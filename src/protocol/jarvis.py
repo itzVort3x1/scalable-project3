@@ -9,6 +9,7 @@ class Jarvis:
         self.send_port = send_port
         self.local_ip = self.get_local_ip()
         self.adjacency_list = self.load_adjacency_list(adjacency_list_file)
+        self.encryption_key = 3
 
     @staticmethod
     def get_local_ip():
@@ -66,6 +67,16 @@ class Jarvis:
             if current is None:
                 return None
         return current
+    
+    def decrypt_message(self, encrypted_message):
+        """Decrypt a message using a simple Caesar cipher."""
+        decrypted = ''.join(chr((ord(char) - self.encryption_key) % 256) for char in encrypted_message)
+        return decrypted
+
+    def encrypt_message(self, message):
+        """Encrypt a message using a simple Caesar cipher."""
+        encrypted = ''.join(chr((ord(char) + self.encryption_key) % 256) for char in message)
+        return encrypted
 
     def handle_message(self, data):
         """Handle incoming messages and forward or process them."""
@@ -73,7 +84,8 @@ class Jarvis:
             packet = json.loads(data)
             source_ip = packet["source_ip"]
             dest_ip = packet["dest_ip"]
-            message = packet["message"]
+            encrypted_message = packet["message"]
+            message = self.decrypt_message(encrypted_message)
 
             print(f"Received packet from {source_ip}: {packet}")
 
@@ -121,7 +133,7 @@ class Jarvis:
         packet = {
             "source_ip": self.local_ip,
             "dest_ip": dest_ip,
-            "message": message
+            "message": self.encrypt_message(message)
         }
         try:
             _, previous_nodes = self.dijkstra(self.adjacency_list, self.local_ip)
