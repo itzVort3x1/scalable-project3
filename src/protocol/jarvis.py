@@ -85,53 +85,152 @@ class Jarvis:
         """Calculate CRC checksum for the message content."""
         return zlib.crc32(message_content.encode('utf-8'))
 
+    # def build_message(self, dest_ip, message, message_type="data"):
+    #     """Build a structured message with header, length, and checksum."""
+    #     try:
+    #         print("Building the message...")
+
+    #         # Encrypt the message content
+    #         message_content = self.encrypt_message(message)
+    #         print(f"Encrypted message content: {message_content}")
+
+    #         # Calculate checksum
+    #         checksum = self.calculate_checksum(message_content)
+    #         print(f"Calculated checksum (build): {checksum}")
+
+    #         # Pack checksum into 4 bytes
+    #         checksum_bytes = struct.pack('!I', checksum)
+
+    #         # Determine message length
+    #         message_length = len(message_content.encode('latin1'))  # Use latin1 to ensure consistent byte length
+    #         print(f"Message length: {message_length} bytes")
+
+    #         # Pack message length into 5 bytes
+    #         length_bytes = message_length.to_bytes(5, byteorder='big')
+
+    #         # Create the header with JSON and encode it as UTF-8
+    #         header = json.dumps({
+    #             "source_ip": self.local_ip,
+    #             "dest_ip": dest_ip,
+    #             "message_type": message_type,
+    #             "hop_count": 0  # Initial hop count is 0
+    #         }).encode('utf-8')
+
+    #         # Concatenate all parts to form the full message
+    #         full_message = header + length_bytes + checksum_bytes + message_content.encode('latin1')
+    #         print(f"Full message constructed: {full_message}")
+
+    #         return full_message
+
+    #     except Exception as e:
+    #         print(f"Error building message: {e}")
+    #         raise ValueError("Failed to build the message.")
+
     def build_message(self, dest_ip, message, message_type="data"):
         """Build a structured message with header, length, and checksum."""
         try:
-            print("Building the message...")
+            print("\n--- Building the message ---")
+
+            # Serialize JSON consistently if the message is a dictionary
+            if isinstance(message, dict):
+                message = json.dumps(message, separators=(',', ':'), ensure_ascii=False)
+            print(f"Serialized JSON: {message}")
 
             # Encrypt the message content
             message_content = self.encrypt_message(message)
-            print(f"Encrypted message content: {message_content}")
+            print(f"Encrypted content: {message_content}")
 
             # Calculate checksum
             checksum = self.calculate_checksum(message_content)
-            print(f"Calculated checksum (build): {checksum}")
+            print(f"Checksum (build): {checksum}")
 
             # Pack checksum into 4 bytes
             checksum_bytes = struct.pack('!I', checksum)
 
             # Determine message length
-            message_length = len(message_content.encode('latin1'))  # Use latin1 to ensure consistent byte length
-            print(f"Message length: {message_length} bytes")
+            message_length = len(message_content.encode('latin1'))
+            print(f"Message length (bytes): {message_length}")
 
             # Pack message length into 5 bytes
             length_bytes = message_length.to_bytes(5, byteorder='big')
 
-            # Create the header with JSON and encode it as UTF-8
+            # Create header JSON and encode it as UTF-8
             header = json.dumps({
                 "source_ip": self.local_ip,
                 "dest_ip": dest_ip,
                 "message_type": message_type,
-                "hop_count": 0  # Initial hop count is 0
-            }).encode('utf-8')
+                "hop_count": 0
+            }, separators=(',', ':')).encode('utf-8')
 
             # Concatenate all parts to form the full message
             full_message = header + length_bytes + checksum_bytes + message_content.encode('latin1')
-            print(f"Full message constructed: {full_message}")
+            print(f"Full message bytes: {full_message}\n")
 
             return full_message
 
         except Exception as e:
-            print(f"Error building message: {e}")
+            print(f"Error during message construction: {e}")
             raise ValueError("Failed to build the message.")
 
 
+    # def parse_message(self, raw_data):
+    #     """Parse and validate a received message."""
+    #     try:
+    #         print("Parsing the message...")
+
+    #         # Extract and decode the header
+    #         header_length = raw_data.find(b'}') + 1
+    #         if header_length == 0:
+    #             raise ValueError("Header not properly formatted.")
+            
+    #         header = json.loads(raw_data[:header_length].decode('utf-8'))
+    #         print(f"Parsed header: {header}")
+
+    #         # Extract message length
+    #         message_length = int.from_bytes(raw_data[header_length:header_length + 5], byteorder='big')
+    #         print(f"Message length from header: {message_length} bytes")
+
+    #         # Ensure raw_data is long enough
+    #         if len(raw_data) < header_length + 9 + message_length:
+    #             raise ValueError("Incomplete raw data received.")
+
+    #         # Extract checksum
+    #         expected_checksum = struct.unpack('!I', raw_data[header_length + 5:header_length + 9])[0]
+    #         print(f"Expected checksum (parse): {expected_checksum}")
+
+    #         # Extract and decode message content
+    #         encrypted_content = raw_data[header_length + 9:header_length + 9 + message_length].decode('latin1')
+    #         print(f"Encrypted content (parse): {encrypted_content}")
+
+    #         # Recalculate checksum
+    #         actual_checksum = zlib.crc32(encrypted_content.encode('latin1'))
+    #         print(f"Actual checksum (parse): {actual_checksum}")
+
+    #         if expected_checksum != actual_checksum:
+    #             raise ValueError("Checksum verification failed.")
+
+    #         # Decrypt the message content
+    #         decrypted_message = self.decrypt_message(encrypted_content)
+    #         print(f"Decrypted message content: {decrypted_message}")
+
+    #         # Attach the decrypted message to the header
+    #         header["message_content"] = decrypted_message
+    #         return header
+
+    #     except json.JSONDecodeError as e:
+    #         print(f"Error decoding header: {e}")
+    #         raise ValueError("Invalid JSON in header.")
+    #     except UnicodeDecodeError as e:
+    #         print(f"Error decoding message content: {e}")
+    #         raise ValueError("Message content is not valid UTF-8.")
+    #     except Exception as e:
+    #         print(f"Unexpected error while parsing message: {e}")
+    #         raise
 
     def parse_message(self, raw_data):
         """Parse and validate a received message."""
         try:
-            print("Parsing the message...")
+            print("\n--- Parsing the message ---")
 
             # Extract and decode the header
             header_length = raw_data.find(b'}') + 1
@@ -145,19 +244,32 @@ class Jarvis:
             message_length = int.from_bytes(raw_data[header_length:header_length + 5], byteorder='big')
             print(f"Message length from header: {message_length} bytes")
 
-            # Ensure raw_data is long enough
-            if len(raw_data) < header_length + 9 + message_length:
-                raise ValueError("Incomplete raw data received.")
-
             # Extract checksum
             expected_checksum = struct.unpack('!I', raw_data[header_length + 5:header_length + 9])[0]
             print(f"Expected checksum (parse): {expected_checksum}")
 
-            # Extract and decode message content
+            # Extract encrypted content
             encrypted_content = raw_data[header_length + 9:header_length + 9 + message_length].decode('latin1')
             print(f"Encrypted content (parse): {encrypted_content}")
 
-            # Recalculate checksum
+            # If message_type is 'routing-info', skip checksum validation
+            if header.get("message_type") == "routing-info":
+                print("Message type is 'routing-info'. Skipping checksum validation.")
+                decrypted_message = self.decrypt_message(encrypted_content)
+                print(f"Decrypted message: {decrypted_message}")
+
+                # Parse JSON if applicable
+                try:
+                    decrypted_message = json.loads(decrypted_message)
+                    print(f"Parsed JSON message: {decrypted_message}")
+                except json.JSONDecodeError:
+                    print("Decrypted message is not valid JSON.")
+
+                # Attach decrypted message to the header and return
+                header["message_content"] = decrypted_message
+                return header
+
+            # Otherwise, perform checksum validation
             actual_checksum = zlib.crc32(encrypted_content.encode('latin1'))
             print(f"Actual checksum (parse): {actual_checksum}")
 
@@ -166,21 +278,23 @@ class Jarvis:
 
             # Decrypt the message content
             decrypted_message = self.decrypt_message(encrypted_content)
-            print(f"Decrypted message content: {decrypted_message}")
+            print(f"Decrypted message: {decrypted_message}")
 
-            # Attach the decrypted message to the header
+            # Parse JSON if applicable
+            try:
+                decrypted_message = json.loads(decrypted_message)
+                print(f"Parsed JSON message: {decrypted_message}")
+            except json.JSONDecodeError:
+                print("Decrypted message is not valid JSON.")
+
+            # Attach decrypted message to the header
             header["message_content"] = decrypted_message
             return header
 
-        except json.JSONDecodeError as e:
-            print(f"Error decoding header: {e}")
-            raise ValueError("Invalid JSON in header.")
-        except UnicodeDecodeError as e:
-            print(f"Error decoding message content: {e}")
-            raise ValueError("Message content is not valid UTF-8.")
         except Exception as e:
-            print(f"Unexpected error while parsing message: {e}")
+            print(f"Error during message parsing: {e}")
             raise
+
 
 
     def handle_message(self, data):
