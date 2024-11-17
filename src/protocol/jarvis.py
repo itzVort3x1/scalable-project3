@@ -195,6 +195,13 @@ class Jarvis:
         except Exception as e:
             print(f"Error sending message: {e}")
 
+    def store_adjacency_list(self, adjacency_list):
+        """Store the adjacency list locally."""
+        self.adjacency_list = adjacency_list  # Update the in-memory adjacency list
+        with open("./protocol/discovery/adjacency_list.json", "w") as file:
+            json.dump(adjacency_list, file, indent=4)
+        print("Adjacency list stored successfully.")
+
     def start_receiver(self):
         """Start the server to receive direct messages."""
         print("Starting receiver server...")
