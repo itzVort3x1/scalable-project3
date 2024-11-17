@@ -103,9 +103,11 @@ class Jarvis:
 
         length_bytes = message_length.to_bytes(5, byteorder='big')
 
+        # Add hop_count to the header
         header = json.dumps({
             "source_ip": self.local_ip,
             "dest_ip": dest_ip,
+            "hop_count": 0  # Initial hop count is 0
         }).encode('utf-8')
 
         full_message = header + length_bytes + checksum_bytes + message_content.encode('utf-8')
@@ -145,8 +147,39 @@ class Jarvis:
         try:
             message = self.parse_message(data)
             print(f"Received message from {message['source_ip']}: {message['message_content']}")
+
+            # Increment hop_count
+            message["hop_count"] += 1
+            print(f"Incremented hop count: {message['hop_count']}")
+
+            # Check if the message is for this node or needs to be forwarded
+            if message["dest_ip"] == self.local_ip:
+                print(f"Message delivered to this node: {message['message_content']}")
+            else:
+                _, previous_nodes = self.dijkstra(self.adjacency_list, self.local_ip)
+                next_hop = self.get_next_hop(previous_nodes, self.local_ip, message["dest_ip"])
+                if next_hop:
+                    print(f"Message hopping: {message['source_ip']} -> {self.local_ip} -> {next_hop} -> {message['dest_ip']}")
+                    self.forward_message(message, next_hop)
+                else:
+                    print(f"No route to {message['dest_ip']}. Packet dropped.")
         except ValueError as e:
             print(f"Error handling message: {e}")
+
+    def forward_message(self, message, next_hop):
+        """Forward the message to the next hop."""
+        print("Forwarding message...")
+        time.sleep(2)  # Simulate processing delay
+
+        # Rebuild the message with the updated hop_count
+        full_message = self.build_message(message["dest_ip"], message["message_content"])
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.connect((next_hop, self.send_port))
+                s.sendall(full_message)
+                print(f"Packet forwarded to {next_hop}")
+        except Exception as e:
+            print(f"Error forwarding packet: {e}")
 
     def send_message(self, dest_ip, message):
         """Send a structured message to the network."""
