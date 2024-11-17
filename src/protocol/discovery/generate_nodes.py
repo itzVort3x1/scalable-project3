@@ -8,7 +8,7 @@ import platform
 from tqdm import tqdm
 
 # Configuration
-network_range = '192.168.185.0/24'  # Modify this to your network's IP range
+network_range = '10.30.11.0/24'  # Modify this to your network's IP range
 specific_port = 12345  # The port to scan
 max_weight = 10  # Maximum weight for edges
 min_weight = 1  # Minimum weight for edges

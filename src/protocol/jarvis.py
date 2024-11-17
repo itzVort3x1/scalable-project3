@@ -180,10 +180,11 @@ class Jarvis:
 
 # Initialize adjacency list and run Jarvis
 if __name__ == "__main__":
-    adjacency_list = {
-        "192.168.185.27": {"192.168.185.239": 1, "192.168.185.50": 8},
-        "192.168.185.239": {"192.168.185.27": 3, "192.168.185.50": 2},
-        "192.168.185.50": {"192.168.185.27": 8, "192.168.185.239": 3}
-    }
+    file_path = "./discovery/adjacency_list.json"
+
+    adjacency_list = {}
+    # Open and read the file
+    with open(file_path, "r") as file:
+        adjacency_list = json.load(file)
     jarvis = Jarvis(adjacency_list=adjacency_list)
     jarvis.run()
