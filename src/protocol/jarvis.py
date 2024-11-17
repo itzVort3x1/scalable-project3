@@ -7,7 +7,7 @@ import time
 
 
 class Jarvis:
-    def __init__(self, receive_port=12345, send_port=12345, adjacency_list_file="./discovery/adjacency_list.json"):
+    def __init__(self, receive_port=12345, send_port=12345, adjacency_list_file="./protocol/discovery/adjacency_list.json"):
         self.receive_port = receive_port
         self.send_port = send_port
         self.local_ip = self.get_local_ip()
@@ -87,61 +87,101 @@ class Jarvis:
 
     def build_message(self, dest_ip, message, message_type="data"):
         """Build a structured message with header, length, and checksum."""
-        print("Building the message...")
-        # time.sleep(2)  # Simulate processing delay
+        try:
+            print("Building the message...")
 
-        message_content = self.encrypt_message(message)
-        print(f"Encrypted message content: {message_content}")
+            # Encrypt the message content
+            message_content = self.encrypt_message(message)
+            print(f"Encrypted message content: {message_content}")
 
-        checksum = self.calculate_checksum(message_content)
-        print(f"Calculated checksum: {checksum}")
+            # Calculate checksum
+            checksum = self.calculate_checksum(message_content)
+            print(f"Calculated checksum (build): {checksum}")
 
-        checksum_bytes = struct.pack('!I', checksum)
+            # Pack checksum into 4 bytes
+            checksum_bytes = struct.pack('!I', checksum)
 
-        message_length = len(message_content)
-        print(f"Message length: {message_length} bytes")
+            # Determine message length
+            message_length = len(message_content.encode('latin1'))  # Use latin1 to ensure consistent byte length
+            print(f"Message length: {message_length} bytes")
 
-        length_bytes = message_length.to_bytes(5, byteorder='big')
+            # Pack message length into 5 bytes
+            length_bytes = message_length.to_bytes(5, byteorder='big')
 
-        # Add hop_count to the header
-        header = json.dumps({
-            "source_ip": self.local_ip,
-            "dest_ip": dest_ip,
-            "message_type": message_type,
-            "hop_count": 0  # Initial hop count is 0
-        }).encode('utf-8')
+            # Create the header with JSON and encode it as UTF-8
+            header = json.dumps({
+                "source_ip": self.local_ip,
+                "dest_ip": dest_ip,
+                "message_type": message_type,
+                "hop_count": 0  # Initial hop count is 0
+            }).encode('utf-8')
 
-        full_message = header + length_bytes + checksum_bytes + message_content.encode('utf-8')
-        print(f"Full message: {full_message}")
+            # Concatenate all parts to form the full message
+            full_message = header + length_bytes + checksum_bytes + message_content.encode('latin1')
+            print(f"Full message constructed: {full_message}")
 
-        return full_message
+            return full_message
+
+        except Exception as e:
+            print(f"Error building message: {e}")
+            raise ValueError("Failed to build the message.")
+
+
 
     def parse_message(self, raw_data):
         """Parse and validate a received message."""
-        print("Parsing the message...")
-        time.sleep(2)  # Simulate processing delay
+        try:
+            print("Parsing the message...")
 
-        header_length = raw_data.find(b'}') + 1
-        header = json.loads(raw_data[:header_length].decode('utf-8'))
-        print(f"Parsed header: {header}")
+            # Extract and decode the header
+            header_length = raw_data.find(b'}') + 1
+            if header_length == 0:
+                raise ValueError("Header not properly formatted.")
+            
+            header = json.loads(raw_data[:header_length].decode('utf-8'))
+            print(f"Parsed header: {header}")
 
-        message_length = int.from_bytes(raw_data[header_length:header_length + 5], byteorder='big')
-        print(f"Message length from header: {message_length} bytes")
+            # Extract message length
+            message_length = int.from_bytes(raw_data[header_length:header_length + 5], byteorder='big')
+            print(f"Message length from header: {message_length} bytes")
 
-        expected_checksum = struct.unpack('!I', raw_data[header_length + 5:header_length + 9])[0]
-        print(f"Expected checksum: {expected_checksum}")
+            # Ensure raw_data is long enough
+            if len(raw_data) < header_length + 9 + message_length:
+                raise ValueError("Incomplete raw data received.")
 
-        message_content = raw_data[header_length + 9:header_length + 9 + message_length].decode('utf-8')
-        actual_checksum = zlib.crc32(message_content.encode('utf-8'))
+            # Extract checksum
+            expected_checksum = struct.unpack('!I', raw_data[header_length + 5:header_length + 9])[0]
+            print(f"Expected checksum (parse): {expected_checksum}")
 
-        if expected_checksum != actual_checksum:
-            raise ValueError("Checksum verification failed")
+            # Extract and decode message content
+            encrypted_content = raw_data[header_length + 9:header_length + 9 + message_length].decode('latin1')
+            print(f"Encrypted content (parse): {encrypted_content}")
 
-        decrypted_message = self.decrypt_message(message_content)
-        print(f"Decrypted message content: {decrypted_message}")
+            # Recalculate checksum
+            actual_checksum = zlib.crc32(encrypted_content.encode('latin1'))
+            print(f"Actual checksum (parse): {actual_checksum}")
 
-        header["message_content"] = decrypted_message
-        return header
+            if expected_checksum != actual_checksum:
+                raise ValueError("Checksum verification failed.")
+
+            # Decrypt the message content
+            decrypted_message = self.decrypt_message(encrypted_content)
+            print(f"Decrypted message content: {decrypted_message}")
+
+            # Attach the decrypted message to the header
+            header["message_content"] = decrypted_message
+            return header
+
+        except json.JSONDecodeError as e:
+            print(f"Error decoding header: {e}")
+            raise ValueError("Invalid JSON in header.")
+        except UnicodeDecodeError as e:
+            print(f"Error decoding message content: {e}")
+            raise ValueError("Message content is not valid UTF-8.")
+        except Exception as e:
+            print(f"Unexpected error while parsing message: {e}")
+            raise
+
 
     def handle_message(self, data):
         """Handle incoming messages."""
@@ -203,6 +243,36 @@ class Jarvis:
             json.dump(adjacency_list, file, indent=4)
         print("Adjacency list stored successfully.")
 
+    # def start_receiver(self):
+    #     """Start the server to receive direct messages."""
+    #     print("Starting receiver server...")
+    #     time.sleep(2)  # Simulate processing delay
+
+    #     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+    #         server_socket.bind((self.local_ip, self.receive_port))
+    #         server_socket.listen(5)
+    #         print(f"Receiver running on {self.local_ip}:{self.receive_port}")
+
+    #         while True:
+    #             conn, _ = server_socket.accept()
+    #             with conn:
+    #                 raw_data = conn.recv(4096)
+
+    #                 # Process the data as bytes (without decode)
+    #                 data_bytes = raw_data
+
+    #                 # Process the data as a string (with decode)
+    #                 data_string = raw_data.decode()
+    #                 print(data_string)
+
+    #             try:
+    #                 if data_string['message_type'] == 'routing-info':
+    #                     self.store_adjacency_list(data_string['message'])
+    #                 else:
+    #                     self.handle_message(data_bytes)
+    #             except Exception as e:
+    #                 print(f"Error handling message: {e}")
+
     def start_receiver(self):
         """Start the server to receive direct messages."""
         print("Starting receiver server...")
@@ -217,6 +287,7 @@ class Jarvis:
                 conn, _ = server_socket.accept()
                 with conn:
                     data = conn.recv(4096)
+                    print(">>>>>", data)
                     self.handle_message(data)
 
     def start(self):
@@ -239,3 +310,9 @@ class Jarvis:
                 break
             else:
                 print("Invalid choice.")
+
+
+if __name__ == "__main__":
+    node = Jarvis()
+    print(f"Local IP: {node.local_ip}")
+    node.start()
