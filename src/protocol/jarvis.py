@@ -7,7 +7,7 @@ import time
 
 
 class Jarvis:
-    def __init__(self, receive_port=12345, send_port=12345, adjacency_list_file="./protocol/discovery/adjacency_list.json"):
+    def __init__(self, receive_port=12345, send_port=12345, adjacency_list_file="./discovery/adjacency_list.json"):
         self.receive_port = receive_port
         self.send_port = send_port
         self.local_ip = self.get_local_ip()
@@ -88,7 +88,7 @@ class Jarvis:
     def build_message(self, dest_ip, message, message_type="data"):
         """Build a structured message with header, length, and checksum."""
         print("Building the message...")
-        time.sleep(2)  # Simulate processing delay
+        # time.sleep(2)  # Simulate processing delay
 
         message_content = self.encrypt_message(message)
         print(f"Encrypted message content: {message_content}")
@@ -242,9 +242,3 @@ class Jarvis:
                 break
             else:
                 print("Invalid choice.")
-
-
-if __name__ == "__main__":
-    node = Jarvis()
-    print(f"Local IP: {node.local_ip}")
-    node.start()
