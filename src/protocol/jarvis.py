@@ -215,23 +215,26 @@ class Jarvis:
             while True:
                 conn, _ = server_socket.accept()
                 with conn:
-                    data = conn.recv(4096).decode()  # Increased buffer size for larger messages
+                    data = conn.recv(4096)  # Increased buffer size for larger messages
+
                     try:
                         # Try to parse the received data as JSON
-                        received_data = json.loads(data)
+                        received_data = json.loads(data.decode())  # Decode only to parse as JSON
 
-                        # Check if it's an adjacency list (dictionary structure)
+                        # Check if it's a valid JSON object
                         if isinstance(received_data, dict):
-                            print("Received adjacency list:")
+                            print("Received data:")
                             print(json.dumps(received_data, indent=4))
 
-                            if received_data['message_type'] == 'routing-info':
+                            # Check the message type
+                            if received_data.get('message_type') == 'routing-info':
+                                print("Message type is routing-info. Storing adjacency list...")
                                 self.store_adjacency_list(received_data['message'])
                             else:
-                                print("Invalid message type. Ignoring data.")
+                                print("Message type is not routing-info. Handling it as a regular message...")
+                                self.handle_message(data)  # Pass raw data to handle_message
                         else:
-                            # If it's not an adjacency list, handle it as a regular message
-                            self.handle_message(data)
+                            print("Invalid data structure. Ignoring message.")
                     except json.JSONDecodeError:
                         print("Invalid JSON received. Ignoring data.")
 
