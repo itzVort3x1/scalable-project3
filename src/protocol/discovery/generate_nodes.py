@@ -5,7 +5,7 @@ import concurrent.futures
 import random
 import json
 import platform
-import tqdm
+from tqdm import tqdm
 
 # Configuration
 network_range = '192.168.185.0/24'  # Modify this to your network's IP range
@@ -60,7 +60,7 @@ def discover_nodes():
 
     # Step 1: Discover active IPs
     print(f"Scanning network for active IPs in range {network_range}...")
-    ip_nums = len(ipaddress.IPv4Network(network_range))
+    ip_nums = ipaddress.IPv4Network(network_range).num_addresses
     with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
         with tqdm(total=ip_nums, desc="Pinging IPs", unit="ip") as progress:
             futures = [executor.submit(ping_ip, ip) for ip in ipaddress.IPv4Network(network_range)]
