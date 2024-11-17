@@ -1,3 +1,4 @@
+import os
 import socket
 import threading
 import json
@@ -15,7 +16,9 @@ class Jarvis:
         self.send_port = send_port
         self.local_ip = self.get_local_ip()
         self.adjacency_list = self.load_adjacency_list(adjacency_list_file)
-        self.encryption_key = 3
+        self.project_root = os.path.abspath(os.path.dirname(__file__))  # Get project root dynamically
+        self.private_key_file = os.path.join(self.project_root, "private_key.pem")  # Private key path
+        self.public_key_file = os.path.join(self.project_root, "public_key.pem")    # Public key path
 
     @staticmethod
     def get_local_ip():
@@ -74,17 +77,16 @@ class Jarvis:
                 return None
         return current
 
-    def decrypt_message(self, encrypted_message, private_key_file="private_key.pem"):
+    def decrypt_message(self, encrypted_message):
         """
         Decrypt a message using RSA private key.
         Args:
             encrypted_message (bytes): The encrypted message.
-            private_key_file (str): Path to the RSA private key file.
         Returns:
             str: The decrypted plain text message.
         """
         try:
-            with open(private_key_file, "rb") as f:
+            with open(self.private_key_file, "rb") as f:
                 private_key = serialization.load_pem_private_key(f.read(), password=None)
 
             # Decrypt the message using the private key
@@ -101,17 +103,16 @@ class Jarvis:
             print(f"Decryption failed: {e}")
             raise
 
-    def encrypt_message(self, message, public_key_file="public_key.pem"):
+    def encrypt_message(self, message):
         """
         Encrypt a message using RSA public key.
         Args:
             message (str): The plain text message to encrypt.
-            public_key_file (str): Path to the RSA public key file.
         Returns:
             bytes: The encrypted message in bytes.
         """
         try:
-            with open(public_key_file, "rb") as f:
+            with open(self.public_key_file, "rb") as f:
                 public_key = serialization.load_pem_public_key(f.read())
 
             # Encrypt the message using the public key
