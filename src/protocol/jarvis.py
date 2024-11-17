@@ -208,9 +208,25 @@ class Jarvis:
             while True:
                 conn, _ = server_socket.accept()
                 with conn:
-                    data = conn.recv(4096)
-                    print(f"Raw data received: {data}")
-                    self.handle_message(data)
+                    data = conn.recv(4096).decode()  # Increased buffer size for larger messages
+                    try:
+                        # Try to parse the received data as JSON
+                        received_data = json.loads(data)
+
+                        # Check if it's an adjacency list (dictionary structure)
+                        if isinstance(received_data, dict):
+                            print("Received adjacency list:")
+                            print(json.dumps(received_data, indent=4))
+
+                            if received_data['message_type'] == 'routing-info':
+                                self.store_adjacency_list(received_data['message'])
+                            else:
+                                print("Invalid message type. Ignoring data.")
+                        else:
+                            # If it's not an adjacency list, handle it as a regular message
+                            self.handle_message(data)
+                    except json.JSONDecodeError:
+                        print("Invalid JSON received. Ignoring data.")
 
     def start(self):
         """Start the receiver server in a separate thread."""
