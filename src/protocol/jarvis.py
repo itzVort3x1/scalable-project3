@@ -10,6 +10,8 @@ class Jarvis:
         self.local_ip = self.get_local_ip()
         self.adjacency_list = self.load_adjacency_list(adjacency_list_file)
         self.handshake = Handshake()
+        self.receiver_socket = None  # Receiver server socket
+        self.sender_socket = None    # Sender server socket
 
     @staticmethod
     def get_local_ip():
@@ -92,29 +94,31 @@ class Jarvis:
 
     def start_receiver(self):
         """Start the server to receive direct messages."""
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-            server_socket.bind((self.local_ip, self.RECEIVE_PORT))
-            server_socket.listen(5)
+        if self.receiver_socket is None:
+            self.receiver_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.receiver_socket.bind((self.local_ip, self.RECEIVE_PORT))
+            self.receiver_socket.listen(5)
             print(f"Receiver running on {self.local_ip}:{self.RECEIVE_PORT}")
 
-            while True:
-                conn, _ = server_socket.accept()
-                with conn:
-                    data = conn.recv(1024).decode()
-                    self.handle_message(data)
+        while True:
+            conn, _ = self.receiver_socket.accept()
+            with conn:
+                data = conn.recv(1024).decode()
+                self.handle_message(data)
 
     def start_sending_server(self):
         """Start the server to handle forwarded messages."""
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-            server_socket.bind((self.local_ip, self.SEND_PORT))
-            server_socket.listen(5)
+        if self.sender_socket is None:
+            self.sender_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.sender_socket.bind((self.local_ip, self.SEND_PORT))
+            self.sender_socket.listen(5)
             print(f"Sender running on {self.local_ip}:{self.SEND_PORT}")
 
-            while True:
-                conn, _ = server_socket.accept()
-                with conn:
-                    data = conn.recv(1024).decode()
-                    self.handle_message(data)
+        while True:
+            conn, _ = self.sender_socket.accept()
+            with conn:
+                data = conn.recv(1024).decode()
+                self.handle_message(data)
 
     def send_message(self, dest_ip, message):
         """Send a message to the network."""
