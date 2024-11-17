@@ -1,15 +1,14 @@
 import socket
 import threading
 import json
-import logging
+
 
 class Jarvis:
-    def __init__(self, receive_port=12345, send_port=54321, adjacency_list=None):
-        self.receive_port = receive_port
-        self.send_port = send_port
-        self.adjacency_list = adjacency_list or {}
+    def __init__(self, receive_port=12345, send_port=54321, adjacency_list_file="../discovery/adjacency_list.json"):
+        self.RECEIVE_PORT = receive_port
+        self.SEND_PORT = send_port
         self.local_ip = self.get_local_ip()
-        print(f"Jarvis initialized on IP: {self.local_ip}")
+        self.adjacency_list = self.load_adjacency_list(adjacency_list_file)
 
     @staticmethod
     def get_local_ip():
@@ -17,6 +16,16 @@ class Jarvis:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.connect(("8.8.8.8", 80))
             return s.getsockname()[0]
+
+    @staticmethod
+    def load_adjacency_list(file_path):
+        """Load the adjacency list from a JSON file."""
+        try:
+            with open(file_path, "r") as file:
+                return json.load(file)
+        except FileNotFoundError:
+            print(f"File not found: {file_path}")
+            return {}
 
     @staticmethod
     def dijkstra(graph, start):
@@ -83,9 +92,9 @@ class Jarvis:
     def start_receiver(self):
         """Start the server to receive direct messages."""
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-            server_socket.bind((self.local_ip, self.receive_port))
+            server_socket.bind((self.local_ip, self.RECEIVE_PORT))
             server_socket.listen(5)
-            print(f"Receiver running on {self.local_ip}:{self.receive_port}")
+            print(f"Receiver running on {self.local_ip}:{self.RECEIVE_PORT}")
 
             while True:
                 conn, _ = server_socket.accept()
@@ -96,35 +105,15 @@ class Jarvis:
     def start_sending_server(self):
         """Start the server to handle forwarded messages."""
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-            server_socket.bind((self.local_ip, self.send_port))
+            server_socket.bind((self.local_ip, self.SEND_PORT))
             server_socket.listen(5)
-            print(f"Sender running on {self.local_ip}:{self.send_port}")
+            print(f"Sender running on {self.local_ip}:{self.SEND_PORT}")
 
             while True:
                 conn, _ = server_socket.accept()
                 with conn:
                     data = conn.recv(1024).decode()
                     self.handle_message(data)
-
-    def perform_handshake(self, client_socket, is_server):
-        if is_server:
-            logging.info("Server: Generating keys for handshake.")
-            server_private_key, server_public_key = self.handshake.generate_keys()
-            client_socket.sendall(str(server_public_key).encode())
-            logging.info("Server: Sent public key to client.")
-            client_public_key = int(client_socket.recv(1024).decode())
-            logging.info("Server: Received public key from client.")
-            self.handshake.establish_shared_key(client_public_key, server_private_key)
-            logging.info("Server: Shared secret established.")
-        else:
-            logging.info("Client: Generating keys for handshake.")
-            client_private_key, client_public_key = self.handshake.generate_keys()
-            server_public_key = int(client_socket.recv(1024).decode())
-            logging.info("Client: Received public key from server.")
-            client_socket.sendall(str(client_public_key).encode())
-            logging.info("Client: Sent public key to server.")
-            self.handshake.establish_shared_key(server_public_key, client_private_key)
-            logging.info("Client: Shared secret established.")
 
     def send_message(self, dest_ip, message):
         """Send a message to the network."""
@@ -138,7 +127,7 @@ class Jarvis:
             next_hop = self.get_next_hop(previous_nodes, self.local_ip, dest_ip)
             if next_hop:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    s.connect((next_hop, self.send_port))
+                    s.connect((next_hop, self.SEND_PORT))
                     s.sendall(json.dumps(packet).encode())
                     print(f"Message sent to {dest_ip} via {next_hop}: {message}")
             else:
@@ -150,14 +139,14 @@ class Jarvis:
         """Forward the message to the next hop."""
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.connect((next_hop, self.send_port))
+                s.connect((next_hop, self.SEND_PORT))
                 s.sendall(json.dumps(packet).encode())
                 print(f"Packet forwarded to {next_hop}")
         except Exception as e:
             print(f"Error forwarding packet: {e}")
 
-    def run(self):
-        """Run Jarvis, starting receiver and sender threads, and providing a CLI."""
+    def start(self):
+        """Start the receiver and sender servers in separate threads."""
         threading.Thread(target=self.start_receiver, daemon=True).start()
         threading.Thread(target=self.start_sending_server, daemon=True).start()
 
@@ -178,13 +167,8 @@ class Jarvis:
             else:
                 print("Invalid choice.")
 
-# Initialize adjacency list and run Jarvis
-if __name__ == "__main__":
-    file_path = "./discovery/adjacency_list.json"
 
-    adjacency_list = {}
-    # Open and read the file
-    with open(file_path, "r") as file:
-        adjacency_list = json.load(file)
-    jarvis = Jarvis(adjacency_list=adjacency_list)
-    jarvis.run()
+if __name__ == "__main__":
+    jarvis = Jarvis()
+    print(f"Local IP: {jarvis.local_ip}")
+    jarvis.start()

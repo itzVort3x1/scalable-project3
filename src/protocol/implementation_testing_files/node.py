@@ -7,14 +7,14 @@ RECEIVE_PORT = 12345  # Port for receiving messages directly
 SEND_PORT = 54321     # Port for forwarding messages
 
 # Nodes in the network with static weights
-file_path = "./discovery/adjacency_list.json"
+file_path = "../discovery/adjacency_list.json"
 
 adjacency_list = {}
     # Open and read the file
 with open(file_path, "r") as file:
     adjacency_list = json.load(file)
 
-    
+
 def get_local_ip():
     """Retrieve the local IP address."""
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
