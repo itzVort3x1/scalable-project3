@@ -11,9 +11,24 @@ class Jarvis:
         self.local_ip = self.get_local_ip()
         self.adjacency_list = self.load_adjacency_list(adjacency_list_file)
 
-        # Encryption setup
-        self.encryption_key = Fernet.generate_key()
+        # Load shared encryption key (ensure all nodes use the same key)
+        self.encryption_key = self.load_shared_key()
         self.cipher = Fernet(self.encryption_key)
+
+    @staticmethod
+    def load_shared_key():
+        """Load or generate a shared encryption key."""
+        key_file = "shared_key.key"
+        try:
+            with open(key_file, "rb") as file:
+                return file.read()
+        except FileNotFoundError:
+            # Generate and save the key for the first-time run
+            key = Fernet.generate_key()
+            with open(key_file, "wb") as file:
+                file.write(key)
+            print(f"Generated new shared key. Saved to {key_file}.")
+            return key
 
     @staticmethod
     def get_local_ip():
