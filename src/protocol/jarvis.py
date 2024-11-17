@@ -286,7 +286,7 @@ class Jarvis:
             while True:
                 conn, _ = server_socket.accept()
                 with conn:
-                    data = conn.recv(4096)
+                    data = conn.recv(8192)
                     print(">>>>>", data)
                     self.handle_message(data)
 
