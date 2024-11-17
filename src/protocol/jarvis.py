@@ -217,9 +217,6 @@ class Jarvis:
                 conn, _ = server_socket.accept()
                 with conn:
                     data = conn.recv(4096)
-                    print(f"Raw data received: {data}")
-                    parsed_data = self.parse_message(data)
-                    print("asdfsf",parsed_data)
                     self.handle_message(data)
 
     def start(self):

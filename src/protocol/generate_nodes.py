@@ -6,6 +6,7 @@ import random
 import json
 import platform
 from tqdm import tqdm
+from jarvis import Jarvis
 
 # Configuration
 specific_port = 33000  # The port to scan
@@ -107,20 +108,15 @@ def save_adjacency_list_to_file(adjacency_list, filename="adjacency_list.json"):
 
 def share_adjacency_list(nodes, adjacency_list):
     """Share the adjacency list with all discovered nodes."""
-    local_ip = get_local_ip()
+
+    jarvis = Jarvis()
 
     for node in nodes:
         try:
-            packet = {
-                "source_ip": local_ip,
-                "dest_ip": str(node),
-                "message_type": "routing-info",
-                "message": adjacency_list
-            }
-            serialized_list = json.dumps(packet).encode()
+            full_message = jarvis.build_message(str(node), str(adjacency_list), 'routing-info')
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.connect((str(node), specific_port))
-                s.sendall(serialized_list)
+                s.sendall(full_message)
                 print(f"Shared adjacency list with node {node}")
         except Exception as e:
             print(f"Failed to share adjacency list with {node}: {e}")
