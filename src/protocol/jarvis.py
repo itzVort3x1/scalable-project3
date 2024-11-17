@@ -1,6 +1,8 @@
 import socket
 import threading
 import json
+import zlib
+import struct
 
 
 class Jarvis:
@@ -67,7 +69,7 @@ class Jarvis:
             if current is None:
                 return None
         return current
-    
+
     def decrypt_message(self, encrypted_message):
         """Decrypt a message using a simple Caesar cipher."""
         decrypted = ''.join(chr((ord(char) - self.encryption_key) % 256) for char in encrypted_message)
@@ -78,39 +80,63 @@ class Jarvis:
         encrypted = ''.join(chr((ord(char) + self.encryption_key) % 256) for char in message)
         return encrypted
 
+    def calculate_checksum(self, message_content):
+        """Calculate CRC checksum for the message content."""
+        return zlib.crc32(message_content.encode('utf-8'))
+
+    def build_message(self, dest_ip, message):
+        """Build a structured message with header, length, and checksum."""
+        message_content = self.encrypt_message(message)
+        checksum = self.calculate_checksum(message_content)
+        checksum_bytes = struct.pack('!I', checksum)
+
+        message_length = len(message_content)
+        length_bytes = message_length.to_bytes(5, byteorder='big')
+
+        header = json.dumps({
+            "source_ip": self.local_ip,
+            "dest_ip": dest_ip,
+        }).encode('utf-8')
+
+        return header + length_bytes + checksum_bytes + message_content.encode('utf-8')
+
+    def parse_message(self, raw_data):
+        """Parse and validate a received message."""
+        header_length = raw_data.find(b'}') + 1
+        header = json.loads(raw_data[:header_length].decode('utf-8'))
+
+        message_length = int.from_bytes(raw_data[header_length:header_length + 5], byteorder='big')
+        expected_checksum = struct.unpack('!I', raw_data[header_length + 5:header_length + 9])[0]
+        message_content = raw_data[header_length + 9:header_length + 9 + message_length].decode('utf-8')
+
+        actual_checksum = zlib.crc32(message_content.encode('utf-8'))
+        if expected_checksum != actual_checksum:
+            raise ValueError("Checksum verification failed")
+
+        header["message_content"] = self.decrypt_message(message_content)
+        return header
+
     def handle_message(self, data):
-        """Handle incoming messages and forward or process them."""
+        """Handle incoming messages."""
         try:
-            packet = json.loads(data)
-            source_ip = packet["source_ip"]
-            dest_ip = packet["dest_ip"]
-            encrypted_message = packet["message"]
-            message = self.decrypt_message(encrypted_message)
-
-            print(f"Received packet from {source_ip}: {packet}")
-
-            if dest_ip == self.local_ip:
-                print(f"Message delivered to this computer: {message}")
-            else:
-                _, previous_nodes = self.dijkstra(self.adjacency_list, self.local_ip)
-                next_hop = self.get_next_hop(previous_nodes, self.local_ip, dest_ip)
-                if next_hop:
-                    print(f"Message hopping: {source_ip} -> {self.local_ip} -> {next_hop} -> {dest_ip}")
-                    self.forward_message(packet, next_hop)
-                else:
-                    print(f"No route to {dest_ip}. Packet dropped.")
-        except Exception as e:
+            message = self.parse_message(data)
+            print(f"Received message from {message['source_ip']}: {message['message_content']}")
+        except ValueError as e:
             print(f"Error handling message: {e}")
 
-    def store_adjacency_list(self, adjacency_list):
-        """Store the adjacency list locally."""
-        self.adjacency_list = adjacency_list  # Update the in-memory adjacency list
-        with open("./protocol/discovery/adjacency_list.json", "w") as file:
-            json.dump(adjacency_list, file, indent=4)
-        print("Adjacency list stored successfully.")
+    def send_message(self, dest_ip, message):
+        """Send a structured message to the network."""
+        full_message = self.build_message(dest_ip, message)
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.connect((dest_ip, self.send_port))
+                s.sendall(full_message)
+                print(f"Message sent to {dest_ip}: {message}")
+        except Exception as e:
+            print(f"Error sending message: {e}")
 
     def start_receiver(self):
-        """Start the server to receive direct messages or adjacency lists."""
+        """Start the server to receive direct messages."""
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
             server_socket.bind((self.local_ip, self.receive_port))
             server_socket.listen(5)
@@ -119,74 +145,12 @@ class Jarvis:
             while True:
                 conn, _ = server_socket.accept()
                 with conn:
-                    data = conn.recv(4096).decode()  # Increased buffer size for larger messages
-                    try:
-                        # Try to parse the received data as JSON
-                        received_data = json.loads(data)
-
-                        # Check if it's an adjacency list (dictionary structure)
-                        if isinstance(received_data, dict):
-                            print("Received adjacency list:")
-                            print(json.dumps(received_data, indent=4))
-
-                            if received_data['message_type'] == 'routing-info':
-                                self.store_adjacency_list(received_data['message'])
-                            else:
-                                print("Invalid message type. Ignoring data.")
-                        else:
-                            # If it's not an adjacency list, handle it as a regular message
-                            self.handle_message(data)
-                    except json.JSONDecodeError:
-                        print("Invalid JSON received. Ignoring data.")
-
-
-    def start_sending_server(self):
-        """Start the server to handle forwarded messages."""
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-            server_socket.bind((self.local_ip, self.send_port))
-            server_socket.listen(5)
-            print(f"Sender running on {self.local_ip}:{self.send_port}")
-
-            while True:
-                conn, _ = server_socket.accept()
-                with conn:
-                    data = conn.recv(1024).decode()
+                    data = conn.recv(4096)
                     self.handle_message(data)
 
-    def send_message(self, dest_ip, message):
-        """Send a message to the network."""
-        packet = {
-            "source_ip": self.local_ip,
-            "dest_ip": dest_ip,
-            "message": self.encrypt_message(message)
-        }
-        try:
-            _, previous_nodes = self.dijkstra(self.adjacency_list, self.local_ip)
-            next_hop = self.get_next_hop(previous_nodes, self.local_ip, dest_ip)
-            if next_hop:
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    s.connect((next_hop, self.send_port))
-                    s.sendall(json.dumps(packet).encode())
-                    print(f"Message sent to {dest_ip} via {next_hop}: {message}")
-            else:
-                print(f"Message could not be delivered to {dest_ip}: No route found.")
-        except Exception as e:
-            print(f"Error sending message: {e}")
-
-    def forward_message(self, packet, next_hop):
-        """Forward the message to the next hop."""
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.connect((next_hop, self.send_port))
-                s.sendall(json.dumps(packet).encode())
-                print(f"Packet forwarded to {next_hop}")
-        except Exception as e:
-            print(f"Error forwarding packet: {e}")
-
     def start(self):
-        """Start the receiver server and sender server in separate threads."""
+        """Start the receiver server in a separate thread."""
         threading.Thread(target=self.start_receiver, daemon=True).start()
-        threading.Thread(target=self.start_sending_server, daemon=True).start()
 
         # Interactive CLI
         while True:
@@ -205,3 +169,8 @@ class Jarvis:
             else:
                 print("Invalid choice.")
 
+
+if __name__ == "__main__":
+    node = Jarvis()
+    print(f"Local IP: {node.local_ip}")
+    node.start()
