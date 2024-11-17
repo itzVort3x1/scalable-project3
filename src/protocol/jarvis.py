@@ -75,7 +75,7 @@ class Jarvis:
         """Handle incoming messages and forward or process them, with handshake."""
         try:
             # Perform the handshake
-            self.perform_handshake(socket_connection=conn)
+            self.perform_handshake(socket_connection=conn, is_server=False)
 
             # Receive and process the message after the handshake
             data = conn.recv(1024).decode()
@@ -127,11 +127,11 @@ class Jarvis:
                 data = conn.recv(1024).decode()
                 self.handle_message(data)
 
-    def perform_handshake(self, socket_connection):
+    def perform_handshake(self, socket_connection, is_server=False):
         """Randomly assign roles for handshake and establish a shared secret."""
         try:
             # Randomly decide whether this instance is the server or client
-            is_server = True
+            is_server = is_server
 
             if is_server:
                 logging.info("This node is acting as the server for the handshake.")
@@ -165,7 +165,7 @@ class Jarvis:
             if next_hop:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                     s.connect((next_hop, self.SEND_PORT))
-                    self.perform_handshake(socket_connection=s)  # Perform handshake
+                    self.perform_handshake(socket_connection=s, is_server=True)  # Perform handshake
                     encrypted_message = self.handshake.encrypt_message(message)
                     packet = {
                         "source_ip": self.local_ip,
