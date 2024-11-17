@@ -1,34 +1,23 @@
 import socket
 import threading
 import json
+import requests
 from cryptography.fernet import Fernet
+from http.server import HTTPServer, SimpleHTTPRequestHandler
+import ssl
 
 
 class Jarvis:
-    def __init__(self, receive_port=12345, send_port=54321, adjacency_list_file="./discovery/adjacency_list.json"):
+    def __init__(self, receive_port=12345, send_port=54321, key_server_port=4443, adjacency_list_file="./discovery/adjacency_list.json"):
         self.receive_port = receive_port
         self.send_port = send_port
+        self.key_server_port = key_server_port
         self.local_ip = self.get_local_ip()
         self.adjacency_list = self.load_adjacency_list(adjacency_list_file)
 
-        # Load shared encryption key (ensure all nodes use the same key)
-        self.encryption_key = self.load_shared_key()
+        # Load or fetch the encryption key
+        self.encryption_key = self.load_or_fetch_shared_key()
         self.cipher = Fernet(self.encryption_key)
-
-    @staticmethod
-    def load_shared_key():
-        """Load or generate a shared encryption key."""
-        key_file = "shared_key.key"
-        try:
-            with open(key_file, "rb") as file:
-                return file.read()
-        except FileNotFoundError:
-            # Generate and save the key for the first-time run
-            key = Fernet.generate_key()
-            with open(key_file, "wb") as file:
-                file.write(key)
-            print(f"Generated new shared key. Saved to {key_file}.")
-            return key
 
     @staticmethod
     def get_local_ip():
@@ -46,6 +35,130 @@ class Jarvis:
         except FileNotFoundError:
             print(f"File not found: {file_path}")
             return {}
+
+    def load_or_fetch_shared_key(self):
+        """Load the shared encryption key from a file or fetch it from a key server."""
+        key_file = "shared_key.key"
+        try:
+            with open(key_file, "rb") as file:
+                print(f"Loaded shared key from {key_file}")
+                return file.read()
+        except FileNotFoundError:
+            # Fetch the key from the key server
+            key_server_url = f"https://{self.get_key_server_ip()}:{self.key_server_port}/shared_key.key"
+            try:
+                response = requests.get(key_server_url, verify=False)  # Disable SSL verification for simplicity
+                response.raise_for_status()
+                with open(key_file, "wb") as file:
+                    file.write(response.content)
+                print(f"Fetched shared key from {key_server_url} and saved to {key_file}")
+                return response.content
+            except Exception as e:
+                print(f"Failed to fetch shared key: {e}")
+                raise e
+
+    def get_key_server_ip(self):
+        """Determine the IP address of the key server (first node in the adjacency list)."""
+        if self.adjacency_list:
+            return list(self.adjacency_list.keys())[0]  # Assume the first node is the key server
+        raise ValueError("No key server IP available in adjacency list.")
+
+    def start_key_server(self):
+        """Start an HTTPS server to distribute the shared key."""
+        key_file = "shared_key.key"
+        if not hasattr(self, "encryption_key"):
+            print("Shared key not generated. Cannot start key server.")
+            return
+
+        # Save the key locally if it doesn't exist
+        with open(key_file, "wb") as file:
+            file.write(self.encryption_key)
+
+        class KeyRequestHandler(SimpleHTTPRequestHandler):
+            def log_message(self, format, *args):
+                return  # Suppress HTTP request logging
+
+        httpd = HTTPServer((self.local_ip, self.key_server_port), KeyRequestHandler)
+        httpd.socket = ssl.wrap_socket(httpd.socket, certfile="cert.pem", keyfile="key.pem", server_side=True)
+        print(f"Key server running on https://{self.local_ip}:{self.key_server_port}")
+        httpd.serve_forever()
+
+    def encrypt_message(self, message):
+        """Encrypt a message."""
+        return self.cipher.encrypt(message.encode()).decode()
+
+    def decrypt_message(self, encrypted_message):
+        """Decrypt a message."""
+        return self.cipher.decrypt(encrypted_message.encode()).decode()
+
+    def handle_message(self, data):
+        """Handle incoming messages, decrypt, and process or forward them."""
+        try:
+            packet = json.loads(data)
+            source_ip = packet["source_ip"]
+            dest_ip = packet["dest_ip"]
+            encrypted_message = packet["message"]
+
+            # Decrypt the message
+            message = self.decrypt_message(encrypted_message)
+            print(f"Received packet from {source_ip}: {packet}")
+
+            if dest_ip == self.local_ip:
+                print(f"Message delivered to this computer: {message}")
+            else:
+                _, previous_nodes = self.dijkstra(self.adjacency_list, self.local_ip)
+                next_hop = self.get_next_hop(previous_nodes, self.local_ip, dest_ip)
+                if next_hop:
+                    print(f"Message hopping: {source_ip} -> {self.local_ip} -> {next_hop} -> {dest_ip}")
+                    self.forward_message(packet, next_hop)
+                else:
+                    print(f"No route to {dest_ip}. Packet dropped.")
+        except Exception as e:
+            print(f"Error handling message: {e}")
+
+    def send_message(self, dest_ip, message):
+        """Send a message to the network."""
+        encrypted_message = self.encrypt_message(message)
+        packet = {
+            "source_ip": self.local_ip,
+            "dest_ip": dest_ip,
+            "message": encrypted_message
+        }
+        try:
+            _, previous_nodes = self.dijkstra(self.adjacency_list, self.local_ip)
+            next_hop = self.get_next_hop(previous_nodes, self.local_ip, dest_ip)
+            if next_hop:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.connect((next_hop, self.send_port))
+                    s.sendall(json.dumps(packet).encode())
+                    print(f"Message sent to {dest_ip} via {next_hop}: {message}")
+            else:
+                print(f"Message could not be delivered to {dest_ip}: No route found.")
+        except Exception as e:
+            print(f"Error sending message: {e}")
+
+    def start(self):
+        """Start the receiver and optionally the key server."""
+        threading.Thread(target=self.start_receiver, daemon=True).start()
+
+        if self.local_ip == self.get_key_server_ip():
+            threading.Thread(target=self.start_key_server, daemon=True).start()
+
+        while True:
+            print("\nOptions:")
+            print("1. Send a message")
+            print("2. Exit")
+            choice = input("Enter your choice: ")
+
+            if choice == "1":
+                dest_ip = input("Enter the destination IP: ")
+                message = input("Enter the message: ")
+                self.send_message(dest_ip, message)
+            elif choice == "2":
+                print("Exiting...")
+                break
+            else:
+                print("Invalid choice.")
 
     @staticmethod
     def dijkstra(graph, start):
@@ -86,118 +199,6 @@ class Jarvis:
             if current is None:
                 return None
         return current
-
-    def encrypt_message(self, message):
-        """Encrypt a message."""
-        return self.cipher.encrypt(message.encode()).decode()
-
-    def decrypt_message(self, encrypted_message):
-        """Decrypt a message."""
-        return self.cipher.decrypt(encrypted_message.encode()).decode()
-
-    def handle_message(self, data):
-        """Handle incoming messages, decrypt, and process or forward them."""
-        try:
-            packet = json.loads(data)
-            source_ip = packet["source_ip"]
-            dest_ip = packet["dest_ip"]
-            encrypted_message = packet["message"]
-
-            # Decrypt the message
-            message = self.decrypt_message(encrypted_message)
-            print(f"Received packet from {source_ip}: {packet}")
-
-            if dest_ip == self.local_ip:
-                print(f"Message delivered to this computer: {message}")
-            else:
-                _, previous_nodes = self.dijkstra(self.adjacency_list, self.local_ip)
-                next_hop = self.get_next_hop(previous_nodes, self.local_ip, dest_ip)
-                if next_hop:
-                    print(f"Message hopping: {source_ip} -> {self.local_ip} -> {next_hop} -> {dest_ip}")
-                    self.forward_message(packet, next_hop)
-                else:
-                    print(f"No route to {dest_ip}. Packet dropped.")
-        except Exception as e:
-            print(f"Error handling message: {e}")
-
-    def start_receiver(self):
-        """Start the server to receive direct messages."""
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-            server_socket.bind((self.local_ip, self.receive_port))
-            server_socket.listen(5)
-            print(f"Receiver running on {self.local_ip}:{self.receive_port}")
-
-            while True:
-                conn, _ = server_socket.accept()
-                with conn:
-                    data = conn.recv(1024).decode()
-                    self.handle_message(data)
-
-    def start_sending_server(self):
-        """Start the server to handle forwarded messages."""
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-            server_socket.bind((self.local_ip, self.send_port))
-            server_socket.listen(5)
-            print(f"Sender running on {self.local_ip}:{self.send_port}")
-
-            while True:
-                conn, _ = server_socket.accept()
-                with conn:
-                    data = conn.recv(1024).decode()
-                    self.handle_message(data)
-
-    def send_message(self, dest_ip, message):
-        """Send a message to the network."""
-        encrypted_message = self.encrypt_message(message)
-        packet = {
-            "source_ip": self.local_ip,
-            "dest_ip": dest_ip,
-            "message": encrypted_message
-        }
-        try:
-            _, previous_nodes = self.dijkstra(self.adjacency_list, self.local_ip)
-            next_hop = self.get_next_hop(previous_nodes, self.local_ip, dest_ip)
-            if next_hop:
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    s.connect((next_hop, self.send_port))
-                    s.sendall(json.dumps(packet).encode())
-                    print(f"Message sent to {dest_ip} via {next_hop}: {message}")
-            else:
-                print(f"Message could not be delivered to {dest_ip}: No route found.")
-        except Exception as e:
-            print(f"Error sending message: {e}")
-
-    def forward_message(self, packet, next_hop):
-        """Forward the message to the next hop."""
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.connect((next_hop, self.send_port))
-                s.sendall(json.dumps(packet).encode())
-                print(f"Packet forwarded to {next_hop}")
-        except Exception as e:
-            print(f"Error forwarding packet: {e}")
-
-    def start(self):
-        """Start the receiver server and sender server in separate threads."""
-        threading.Thread(target=self.start_receiver, daemon=True).start()
-        threading.Thread(target=self.start_sending_server, daemon=True).start()
-
-        # Interactive CLI
-        while True:
-            print("\nOptions:")
-            print("1. Send a message")
-            print("2. Exit")
-            choice = input("Enter your choice: ")
-
-            if choice == "1":
-                dest_ip = input("Enter the destination IP: ")
-                message = input("Enter the message: ")
-                self.send_message(dest_ip, message)
-            elif choice == "2":
-                print("Exiting...")
-                break
-            else:
-                print("Invalid choice.")
 
 
 if __name__ == "__main__":
