@@ -1,14 +1,19 @@
 import socket
 import threading
 import json
+from cryptography.fernet import Fernet
 
 
-class NetworkNode:
+class Jarvis:
     def __init__(self, receive_port=12345, send_port=54321, adjacency_list_file="./discovery/adjacency_list.json"):
         self.receive_port = receive_port
         self.send_port = send_port
         self.local_ip = self.get_local_ip()
         self.adjacency_list = self.load_adjacency_list(adjacency_list_file)
+
+        # Encryption setup
+        self.encryption_key = Fernet.generate_key()
+        self.cipher = Fernet(self.encryption_key)
 
     @staticmethod
     def get_local_ip():
@@ -67,14 +72,24 @@ class NetworkNode:
                 return None
         return current
 
+    def encrypt_message(self, message):
+        """Encrypt a message."""
+        return self.cipher.encrypt(message.encode()).decode()
+
+    def decrypt_message(self, encrypted_message):
+        """Decrypt a message."""
+        return self.cipher.decrypt(encrypted_message.encode()).decode()
+
     def handle_message(self, data):
-        """Handle incoming messages and forward or process them."""
+        """Handle incoming messages, decrypt, and process or forward them."""
         try:
             packet = json.loads(data)
             source_ip = packet["source_ip"]
             dest_ip = packet["dest_ip"]
-            message = packet["message"]
+            encrypted_message = packet["message"]
 
+            # Decrypt the message
+            message = self.decrypt_message(encrypted_message)
             print(f"Received packet from {source_ip}: {packet}")
 
             if dest_ip == self.local_ip:
@@ -118,10 +133,11 @@ class NetworkNode:
 
     def send_message(self, dest_ip, message):
         """Send a message to the network."""
+        encrypted_message = self.encrypt_message(message)
         packet = {
             "source_ip": self.local_ip,
             "dest_ip": dest_ip,
-            "message": message
+            "message": encrypted_message
         }
         try:
             _, previous_nodes = self.dijkstra(self.adjacency_list, self.local_ip)
@@ -170,6 +186,6 @@ class NetworkNode:
 
 
 if __name__ == "__main__":
-    node = NetworkNode()
+    node = Jarvis()
     print(f"Local IP: {node.local_ip}")
     node.start()
