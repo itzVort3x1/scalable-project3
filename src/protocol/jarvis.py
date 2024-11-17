@@ -85,7 +85,7 @@ class Jarvis:
         """Calculate CRC checksum for the message content."""
         return zlib.crc32(message_content.encode('utf-8'))
 
-    def build_message(self, dest_ip, message):
+    def build_message(self, dest_ip, message, message_type="data"):
         """Build a structured message with header, length, and checksum."""
         print("Building the message...")
         time.sleep(2)  # Simulate processing delay
@@ -107,6 +107,7 @@ class Jarvis:
         header = json.dumps({
             "source_ip": self.local_ip,
             "dest_ip": dest_ip,
+            "message_type": message_type,
             "hop_count": 0  # Initial hop count is 0
         }).encode('utf-8')
 
@@ -215,28 +216,11 @@ class Jarvis:
             while True:
                 conn, _ = server_socket.accept()
                 with conn:
-                    data = conn.recv(4096)  # Increased buffer size for larger messages
-
-                    try:
-                        # Try to parse the received data as JSON
-                        received_data = json.loads(data.decode())  # Decode only to parse as JSON
-
-                        # Check if it's a valid JSON object
-                        if isinstance(received_data, dict):
-                            print("Received data:")
-                            print(json.dumps(received_data, indent=4))
-
-                            # Check the message type
-                            if received_data.get('message_type') == 'routing-info':
-                                print("Message type is routing-info. Storing adjacency list...")
-                                self.store_adjacency_list(received_data['message'])
-                            else:
-                                print("Message type is not routing-info. Handling it as a regular message...")
-                                self.handle_message(data)  # Pass raw data to handle_message
-                        else:
-                            print("Invalid data structure. Ignoring message.")
-                    except json.JSONDecodeError:
-                        print("Invalid JSON received. Ignoring data.")
+                    data = conn.recv(4096)
+                    print(f"Raw data received: {data}")
+                    parsed_data = self.parse_message(data)
+                    print("asdfsf",parsed_data)
+                    self.handle_message(data)
 
     def start(self):
         """Start the receiver server in a separate thread."""
