@@ -404,6 +404,7 @@ class Jarvis:
                 with conn:
                     data = conn.recv(8192)
                     print(">>>>>", data)
+                    self.receive_callback(data)
                     self.handle_message(data)
 
     def start(self):
@@ -427,6 +428,8 @@ class Jarvis:
             else:
                 print("Invalid choice.")
 
+    def set_receive_callback(self, callback):
+        self.receive_callback = callback
 
 if __name__ == "__main__":
     node = Jarvis()
