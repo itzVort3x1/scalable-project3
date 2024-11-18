@@ -6,7 +6,9 @@ import random
 import json
 import platform
 from tqdm import tqdm
-from jarvis_backup import Jarvis_backup
+from jarvis_copy import Jarvis
+import string
+from ipaddress import IPv4Address
 
 # Configuration
 specific_port = 33000  # The port to scan
@@ -109,11 +111,12 @@ def save_adjacency_list_to_file(adjacency_list, filename="adjacency_list.json"):
 def share_adjacency_list(nodes, adjacency_list):
     """Share the adjacency list with all discovered nodes."""
 
-    jarvis = Jarvis_backup()
+    jarvis = Jarvis()
 
     for node in nodes:
         try:
-            full_message = jarvis.build_message(str(node), str(json.dumps(adjacency_list)), 'routing-info')
+            message_id = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
+            full_message = jarvis.build_message(str(node), str(json.dumps(adjacency_list)), message_id, 'routing-info')
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.connect((str(node), specific_port))
                 s.sendall(full_message)
@@ -135,11 +138,15 @@ if __name__ == "__main__":
     #discovered_nodes.append(local_ip)
 
     print("discovery nodes", discovered_nodes)
+    valid_nodes = [IPv4Address('10.35.70.7'), IPv4Address('10.35.70.17'), IPv4Address('10.35.70.27'),
+        IPv4Address('10.35.70.3'), IPv4Address('10.35.70.4'), IPv4Address('10.35.70.25'),
+        IPv4Address('10.35.70.28')]
 
+    filtered_nodes = [node for node in discovered_nodes if node in valid_nodes]
     # Build adjacency list if nodes are discovered
-    if discovered_nodes:
+    if filtered_nodes:
         print("\nBuilding adjacency list...")
-        adjacency_list = build_adjacency_list(discovered_nodes)
+        adjacency_list = build_adjacency_list(filtered_nodes)
         print("\nGenerated Adjacency List:")
         for node, neighbors in adjacency_list.items():
             print(f"{node}: {neighbors}")
