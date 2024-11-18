@@ -306,16 +306,21 @@ class Jarvis:
             if message["dest_ip"] == self.local_ip:
                 print(f"Message delivered to this node: {message['message_content']}")
 
-                # Send acknowledgment back to the source
-                ack_message = {
-                    "message_type": "ACK",
-                    "message_id": message["message_id"],  # Include the packet ID
-                    "source_ip": self.local_ip,  # This node is the source for the ACK
-                    "dest_ip": message["source_ip"],  # ACK goes back to the original sender
-                    "hop_count": 0  # Reset hop count for ACK
-                }
-                print(f"Sending ACK for message ID {message['message_id']} to {message['source_ip']}")
-                self.send_message(message["source_ip"], ack_message)
+                print(">>>>>>>>>>>.",message['message_type'])
+
+                if(message['message_type'] == 'data'):
+                    # Send acknowledgment back to the source
+                    ack_message = {
+                        "message_type": "ACK",
+                        "message_id": message["message_id"],  # Include the packet ID
+                        "source_ip": self.local_ip,  # This node is the source for the ACK
+                        "dest_ip": message["source_ip"],  # ACK goes back to the original sender
+                        "hop_count": 0  # Reset hop count for ACK
+                    }
+                    print(f"Sending ACK for message ID {message['message_id']} to {message['source_ip']}")
+                    self.send_message(message["source_ip"], ack_message)
+                else:
+                    print("Message delivered to this node: ", message['message_content'])
             else:
                 # Forward the message to the next hop
                 _, previous_nodes = self.dijkstra(self.adjacency_list, self.local_ip)
@@ -398,7 +403,7 @@ class Jarvis:
     def store_adjacency_list(self, adjacency_list):
         """Store the adjacency list locally."""
         self.adjacency_list = adjacency_list  # Update the in-memory adjacency list
-        with open("./protocol/discovery/adjacency_list.json", "w") as file:
+        with open("./discovery/adjacency_list.json", "w") as file:
             json.dump(adjacency_list, file, indent=4)
         print("Adjacency list stored successfully.")
 
