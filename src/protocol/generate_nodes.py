@@ -138,9 +138,9 @@ if __name__ == "__main__":
     valid_nodes = ["10.35.70.7","10.35.70.17","10.35.70.27","10.35.70.3","10.35.70.4","10.35.70.25","10.35.70.28"]
     filtered_nodes = [node for node in discovered_nodes if node in valid_nodes]
     # Build adjacency list if nodes are discovered
-    if discovered_nodes:
+    if filtered_nodes:
         print("\nBuilding adjacency list...")
-        adjacency_list = build_adjacency_list(discovered_nodes)
+        adjacency_list = build_adjacency_list(filtered_nodes)
         print("\nGenerated Adjacency List:")
         for node, neighbors in adjacency_list.items():
             print(f"{node}: {neighbors}")
