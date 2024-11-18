@@ -6,7 +6,7 @@ import random
 import json
 import platform
 from tqdm import tqdm
-from jarvis import Jarvis
+from jarvis_backup import Jarvis_backup
 
 # Configuration
 specific_port = 12345  # The port to scan
@@ -109,7 +109,7 @@ def save_adjacency_list_to_file(adjacency_list, filename="adjacency_list.json"):
 def share_adjacency_list(nodes, adjacency_list):
     """Share the adjacency list with all discovered nodes."""
 
-    jarvis = Jarvis()
+    jarvis = Jarvis_backup()
 
     for node in nodes:
         try:
