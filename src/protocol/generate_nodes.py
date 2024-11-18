@@ -6,10 +6,10 @@ import random
 import json
 import platform
 from tqdm import tqdm
-from jarvis import Jarvis
+from jarvis_backup import Jarvis_backup
 
 # Configuration
-specific_port = 12345  # The port to scan
+specific_port = 33000  # The port to scan
 max_weight = 10  # Maximum weight for edges
 min_weight = 1  # Minimum weight for edges
 
@@ -109,7 +109,7 @@ def save_adjacency_list_to_file(adjacency_list, filename="adjacency_list.json"):
 def share_adjacency_list(nodes, adjacency_list):
     """Share the adjacency list with all discovered nodes."""
 
-    jarvis = Jarvis()
+    jarvis = Jarvis_backup()
 
     for node in nodes:
         try:
@@ -133,6 +133,8 @@ if __name__ == "__main__":
     # Discover nodes
     discovered_nodes = discover_nodes(network_range)
     #discovered_nodes.append(local_ip)
+
+    print("discovery nodes", discovered_nodes)
 
     # Build adjacency list if nodes are discovered
     if discovered_nodes:

@@ -1,5 +1,5 @@
 import argparse
-from protocol.jarvis import Jarvis
+from src.protocol.jarvis import Jarvis
 
 def main():
     # parser = argparse.ArgumentParser(

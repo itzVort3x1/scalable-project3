@@ -5,18 +5,13 @@ import json
 import zlib
 import struct
 import time
-
-import queue
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization
-import string
-import random
-from datetime import datetime
 
 
-class Jarvis:
-    def __init__(self, receive_port=12345, send_port=54321, adjacency_list_file="./discovery/adjacency_list.json"):
+class Jarvis_backup:
+    def __init__(self, receive_port=33000, send_port=34000, adjacency_list_file="./discovery/adjacency_list.json"):
         self.receive_port = receive_port
         self.send_port = send_port
         self.local_ip = self.get_local_ip()
@@ -24,8 +19,6 @@ class Jarvis:
         self.project_root = os.path.abspath(os.path.dirname(__file__))  # Get project root dynamically
         self.private_key_file = os.path.join(self.project_root, "private_key.pem")  # Private key path
         self.public_key_file = os.path.join(self.project_root, "public_key.pem")    # Public key path
-        self.message_queue = queue.Queue()
-
 
     @staticmethod
     def get_local_ip():
@@ -140,13 +133,12 @@ class Jarvis:
         """Calculate CRC checksum for the message content."""
         return zlib.crc32(message_content.encode('utf-8'))
 
-    def build_message(self, dest_ip, message, message_id, message_type="data"):
+    def build_message(self, dest_ip, message, message_type="data"):
         """
         Build a structured message with RSA encryption, header, and checksum.
         Args:
             dest_ip (str): Destination IP address.
             message (str): Plain text message to send.
-            message_id (str): Unique identifier for the message.
             message_type (str): Type of the message (default is 'data').
         Returns:
             bytes: The complete message with header and encrypted content.
@@ -169,12 +161,10 @@ class Jarvis:
             message_length = len(encrypted_message)
             length_bytes = message_length.to_bytes(5, byteorder='big')
 
-            # Include message_id in the header
             header = json.dumps({
                 "source_ip": self.local_ip,
                 "dest_ip": dest_ip,
                 "message_type": message_type,
-                "message_id": message_id,  # Add message_id to the header
                 "hop_count": 0
             }, separators=(',', ':')).encode('utf-8')
 
@@ -283,47 +273,19 @@ class Jarvis:
             return message
 
     def handle_message(self, data):
-        """
-        Handle incoming messages.
-        Args:
-            data (bytes): Raw data received over the network.
-        """
+        """Handle incoming messages."""
         try:
-            # Parse the incoming message
             message = self.parse_message(data)
             print(f"Received message from {message['source_ip']}: {message['message_content']}")
 
-            # Check if the message is an ACK
-            if message["message_type"] == "ACK":
-                # Process the acknowledgment
-                self.process_ack(message)
-                return
-
-            # Increment hop_count for non-ACK messages
+            # Increment hop_count
             message["hop_count"] += 1
             print(f"Incremented hop count: {message['hop_count']}")
 
             # Check if the message is for this node or needs to be forwarded
             if message["dest_ip"] == self.local_ip:
                 print(f"Message delivered to this node: {message['message_content']}")
-
-                print(">>>>>>>>>>>.",message['message_type'])
-
-                if(message['message_type'] == 'data'):
-                    # Send acknowledgment back to the source
-                    ack_message = {
-                        "message_type": "ACK",
-                        "message_id": message["message_id"],  # Include the packet ID
-                        "source_ip": self.local_ip,  # This node is the source for the ACK
-                        "dest_ip": message["source_ip"],  # ACK goes back to the original sender
-                        "hop_count": 0  # Reset hop count for ACK
-                    }
-                    print(f"Sending ACK for message ID {message['message_id']} to {message['source_ip']}")
-                    self.send_message(message["source_ip"], ack_message, message_type='ACK')
-                else:
-                    print("Message delivered to this node: ", message['message_content'])
             else:
-                # Forward the message to the next hop
                 _, previous_nodes = self.dijkstra(self.adjacency_list, self.local_ip)
                 next_hop = self.get_next_hop(previous_nodes, self.local_ip, message["dest_ip"])
                 if next_hop:
@@ -334,42 +296,13 @@ class Jarvis:
         except ValueError as e:
             print(f"Error handling message: {e}")
 
-    def process_ack(self, ack_message):
-        """
-        Process an acknowledgment message.
-        Args:
-            ack_message (dict): The acknowledgment message.
-        """
-        try:
-            acked_message_id = ack_message["message_id"]
-            print(f"Processing ACK for message ID: {acked_message_id}")
-
-            # Iterate through the queue to find and remove the corresponding message
-            queue_size = self.message_queue.qsize()
-            temp_queue = []
-
-            for _ in range(queue_size):
-                queued_item = self.message_queue.get()
-                if queued_item["message_id"] == acked_message_id:
-                    print(f"Message ID {acked_message_id} acknowledged and removed from queue.")
-                    continue  # Skip re-adding this item
-                temp_queue.append(queued_item)
-
-            # Re-add remaining items to the queue
-            for item in temp_queue:
-                self.message_queue.put(item)
-
-        except KeyError:
-            print(f"Invalid ACK message: {ack_message}")
-
-
     def forward_message(self, message, next_hop):
         """Forward the message to the next hop."""
         print("Forwarding message...")
         time.sleep(2)  # Simulate processing delay
 
         # Rebuild the message with the updated hop_count
-        full_message = self.build_message(message["dest_ip"], message["message_content"], message["message_id"])
+        full_message = self.build_message(message["dest_ip"], message["message_content"])
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.connect((next_hop, self.send_port))
@@ -378,21 +311,12 @@ class Jarvis:
         except Exception as e:
             print(f"Error forwarding packet: {e}")
 
-    def send_message(self, dest_ip, message, message_type="data"):
+    def send_message(self, dest_ip, message):
         """Send a structured message to the network."""
         print("Preparing to send message...")
         time.sleep(2)  # Simulate processing delay
 
-        message_id = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
-        timestamp = datetime.now().isoformat()  # ISO 8601 format timestamp
-        self.message_queue.put({
-            "message_id": message_id,
-            "dest_ip": dest_ip,
-            "message": message,
-            "timestamp": timestamp  # Add timestamp
-        })
-
-        full_message = self.build_message(dest_ip, message, message_id, message_type)
+        full_message = self.build_message(dest_ip, message)
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.connect((dest_ip, self.send_port))
@@ -424,7 +348,6 @@ class Jarvis:
                 with conn:
                     data = conn.recv(4096)
                     print(">>>>>", data)
-                    self.receive_callback(data)
                     self.handle_message(data)
 
     def start(self):
@@ -448,10 +371,8 @@ class Jarvis:
             else:
                 print("Invalid choice.")
 
-    def set_receive_callback(self, callback):
-        self.receive_callback = callback
 
 if __name__ == "__main__":
-    node = Jarvis()
+    node = Jarvis_backup()
     print(f"Local IP: {node.local_ip}")
     node.start()
