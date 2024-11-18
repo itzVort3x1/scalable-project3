@@ -318,7 +318,7 @@ class Jarvis:
                         "hop_count": 0  # Reset hop count for ACK
                     }
                     print(f"Sending ACK for message ID {message['message_id']} to {message['source_ip']}")
-                    self.send_message(message["source_ip"], ack_message)
+                    self.send_message(message["source_ip"], ack_message, message_type='ACK')
                 else:
                     print("Message delivered to this node: ", message['message_content'])
             else:
@@ -377,7 +377,7 @@ class Jarvis:
         except Exception as e:
             print(f"Error forwarding packet: {e}")
 
-    def send_message(self, dest_ip, message):
+    def send_message(self, dest_ip, message, message_type="data"):
         """Send a structured message to the network."""
         print("Preparing to send message...")
         time.sleep(2)  # Simulate processing delay
@@ -391,7 +391,7 @@ class Jarvis:
             "timestamp": timestamp  # Add timestamp
         })
 
-        full_message = self.build_message(dest_ip, message, message_id)
+        full_message = self.build_message(dest_ip, message, message_id, message_type)
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.connect((dest_ip, self.send_port))
