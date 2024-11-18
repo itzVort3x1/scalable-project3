@@ -9,7 +9,7 @@ from tqdm import tqdm
 from jarvis_backup import Jarvis_backup
 
 # Configuration
-specific_port = 12345  # The port to scan
+specific_port = 33000  # The port to scan
 max_weight = 10  # Maximum weight for edges
 min_weight = 1  # Minimum weight for edges
 
@@ -133,6 +133,8 @@ if __name__ == "__main__":
     # Discover nodes
     discovered_nodes = discover_nodes(network_range)
     #discovered_nodes.append(local_ip)
+
+    print("discovery nodes", discovered_nodes)
 
     # Build adjacency list if nodes are discovered
     if discovered_nodes:
