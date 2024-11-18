@@ -109,7 +109,7 @@ def save_adjacency_list_to_file(adjacency_list, filename="adjacency_list.json"):
 def share_adjacency_list(nodes, adjacency_list):
     """Share the adjacency list with all discovered nodes."""
 
-    jarvis = Jarvis_backup()
+    jarvis = Jarvis()
 
     for node in nodes:
         try:
