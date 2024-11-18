@@ -6,7 +6,8 @@ import random
 import json
 import platform
 from tqdm import tqdm
-from jarvis import Jarvis
+from jarvis_copy import Jarvis
+import string
 
 # Configuration
 specific_port = 33000  # The port to scan
@@ -113,7 +114,8 @@ def share_adjacency_list(nodes, adjacency_list):
 
     for node in nodes:
         try:
-            full_message = jarvis.build_message(str(node), str(json.dumps(adjacency_list)), 'routing-info')
+            message_id = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
+            full_message = jarvis.build_message(str(node), str(json.dumps(adjacency_list)), message_id, 'routing-info')
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.connect((str(node), specific_port))
                 s.sendall(full_message)
