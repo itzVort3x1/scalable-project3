@@ -6,7 +6,7 @@ import zlib
 import struct
 import time
 import queue
-from cryptography.hazmat.backend import default_backend
+from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization
