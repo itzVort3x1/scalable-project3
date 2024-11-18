@@ -5,6 +5,7 @@ import json
 import zlib
 import struct
 import time
+import queue
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import padding
@@ -307,7 +308,7 @@ class Jarvis:
         full_message = self.build_message(message["dest_ip"], message["message_content"])
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.connect((next_hop, self.send_port))
+                s.connect((next_hop, self.receive_port))
                 s.sendall(full_message)
                 print(f"Packet forwarded to {next_hop}")
         except Exception as e:
