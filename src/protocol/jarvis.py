@@ -144,8 +144,15 @@ class Jarvis:
             bytes: The complete message with header and encrypted content.
         """
         try:
+            print("\n--- Building the message ---")
+            message_content = message
+            # Serialize JSON consistently if the message is a dictionary
+            if isinstance(message, dict):
+                message_content = json.dumps(message, separators=(',', ':'), ensure_ascii=False)
+            print(f"Serialized JSON: {message}")
+
             # Encrypt the message
-            encrypted_message = self.encrypt_message(message)
+            encrypted_message = self.encrypt_message(message_content)
             print(f"Encrypted message: {encrypted_message}")
 
             # Calculate checksum of the encrypted message
@@ -157,15 +164,16 @@ class Jarvis:
 
             # Determine message length
             message_length = len(encrypted_message)
+            print(f"Message length (bytes): {message_length}")
             length_bytes = message_length.to_bytes(5, byteorder='big')
 
-            # Create the header
+            # Create header JSON and encode it as UTF-8
             header = json.dumps({
                 "source_ip": self.local_ip,
                 "dest_ip": dest_ip,
                 "message_type": message_type,
                 "hop_count": 0
-            }).encode('utf-8')
+            }, separators=(',', ':')).encode('utf-8')
 
             # Combine header, length, checksum, and encrypted content
             full_message = header + length_bytes + checksum_bytes + encrypted_message
@@ -186,14 +194,19 @@ class Jarvis:
         try:
             # Extract header
             header_length = raw_data.find(b'}') + 1
+            if header_length == 0:
+                raise ValueError("Header not properly formatted.")
+
             header = json.loads(raw_data[:header_length].decode('utf-8'))
             print(f"Parsed header: {header}")
 
             # Extract message length
             message_length = int.from_bytes(raw_data[header_length:header_length + 5], byteorder='big')
+            print(f"Message length from header: {message_length} bytes")
 
             # Extract checksum
             expected_checksum = struct.unpack('!I', raw_data[header_length + 5:header_length + 9])[0]
+            print(f"Expected checksum (parse): {expected_checksum}")
 
             # Extract encrypted content
             encrypted_content = raw_data[header_length + 9:header_length + 9 + message_length]
@@ -274,35 +287,6 @@ class Jarvis:
             json.dump(adjacency_list, file, indent=4)
         print("Adjacency list stored successfully.")
 
-    # def start_receiver(self):
-    #     """Start the server to receive direct messages."""
-    #     print("Starting receiver server...")
-    #     time.sleep(2)  # Simulate processing delay
-
-    #     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-    #         server_socket.bind((self.local_ip, self.receive_port))
-    #         server_socket.listen(5)
-    #         print(f"Receiver running on {self.local_ip}:{self.receive_port}")
-
-    #         while True:
-    #             conn, _ = server_socket.accept()
-    #             with conn:
-    #                 raw_data = conn.recv(4096)
-
-    #                 # Process the data as bytes (without decode)
-    #                 data_bytes = raw_data
-
-    #                 # Process the data as a string (with decode)
-    #                 data_string = raw_data.decode()
-    #                 print(data_string)
-
-    #             try:
-    #                 if data_string['message_type'] == 'routing-info':
-    #                     self.store_adjacency_list(data_string['message'])
-    #                 else:
-    #                     self.handle_message(data_bytes)
-    #             except Exception as e:
-    #                 print(f"Error handling message: {e}")
 
     def start_receiver(self):
         """Start the server to receive direct messages."""
