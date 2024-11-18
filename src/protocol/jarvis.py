@@ -175,13 +175,14 @@ class Jarvis:
                 "hop_count": 0
             }, separators=(',', ':')).encode('utf-8')
 
-            # Combine header, length, checksum, and encrypted content
-            full_message = header + length_bytes + checksum_bytes + encrypted_message
-            print(f"Constructed message: {full_message}")
+            # Concatenate all parts to form the full message
+            full_message = header + length_bytes + checksum_bytes + message_content.encode('latin1')
+            print(f"Full message bytes: {full_message}\n")
+
             return full_message
         except Exception as e:
-            print(f"Failed to build message: {e}")
-            raise
+            print(f"Error during message construction: {e}")
+            raise ValueError("Failed to build the message.")
 
     def parse_message(self, raw_data):
         """
@@ -192,7 +193,9 @@ class Jarvis:
             dict: The parsed message including the decrypted content.
         """
         try:
-            # Extract header
+            print("\n--- Parsing the message ---")
+
+            # Extract and decode the header
             header_length = raw_data.find(b'}') + 1
             if header_length == 0:
                 raise ValueError("Header not properly formatted.")
@@ -209,22 +212,50 @@ class Jarvis:
             print(f"Expected checksum (parse): {expected_checksum}")
 
             # Extract encrypted content
-            encrypted_content = raw_data[header_length + 9:header_length + 9 + message_length]
+            encrypted_content = raw_data[header_length + 9:header_length + 9 + message_length].decode('latin1')
+            print(f"Encrypted content (parse): {encrypted_content}")
 
-            # Validate checksum
-            actual_checksum = zlib.crc32(encrypted_content.hex().encode('utf-8'))
+            # If message_type is 'routing-info', skip checksum validation
+            if header.get("message_type") == "routing-info":
+                print("Message type is 'routing-info'. Skipping checksum validation.")
+                decrypted_message = self.decrypt_message(encrypted_content)
+                print(f"Decrypted message: {decrypted_message}")
+
+                # Parse JSON if applicable
+                try:
+                    decrypted_message = json.loads(decrypted_message)
+                    self.store_adjacency_list(decrypted_message)
+                    print(f"Parsed JSON message: {decrypted_message}")
+                except json.JSONDecodeError:
+                    print("Decrypted message is not valid JSON.")
+
+                # Attach decrypted message to the header and return
+                header["message_content"] = decrypted_message
+                return header
+
+            # Otherwise, perform checksum validation
+            actual_checksum = zlib.crc32(encrypted_content.encode('latin1'))
+            print(f"Actual checksum (parse): {actual_checksum}")
+
             if expected_checksum != actual_checksum:
-                raise ValueError("Checksum mismatch!")
+                raise ValueError("Checksum verification failed.")
 
             # Decrypt the message content
             decrypted_message = self.decrypt_message(encrypted_content)
             print(f"Decrypted message: {decrypted_message}")
 
-            # Attach the decrypted message to the header
+            # Parse JSON if applicable
+            try:
+                decrypted_message = json.loads(decrypted_message)
+                print(f"Parsed JSON message: {decrypted_message}")
+            except json.JSONDecodeError:
+                print("Decrypted message is not valid JSON.")
+
+            # Attach decrypted message to the header
             header["message_content"] = decrypted_message
             return header
         except Exception as e:
-            print(f"Failed to parse message: {e}")
+            print(f"Error during message parsing: {e}")
             raise
 
     def handle_message(self, data):
