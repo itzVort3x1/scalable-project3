@@ -15,7 +15,7 @@ from datetime import datetime
 
 
 class Jarvis:
-    def __init__(self, receive_port=12345, send_port=54321, adjacency_list_file="./discovery/adjacency_list.json"):
+    def __init__(self, receive_port=33000, send_port=34000, adjacency_list_file="./discovery/adjacency_list.json"):
         self.receive_port = receive_port
         self.send_port = send_port
         self.local_ip = self.get_local_ip()
@@ -370,7 +370,7 @@ class Jarvis:
         full_message = self.build_message(message["dest_ip"], message["message_content"], message["message_id"])
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.connect((next_hop, self.send_port))
+                s.connect((next_hop, self.receive_port))
                 s.sendall(full_message)
                 print(f"Packet forwarded to {next_hop}")
         except Exception as e:
@@ -393,7 +393,7 @@ class Jarvis:
         full_message = self.build_message(dest_ip, message, message_id, message_type)
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.connect((dest_ip, self.send_port))
+                s.connect((dest_ip, self.receive_port))
                 s.sendall(full_message)
                 print(f"Message sent to {dest_ip}: {message}")
         except Exception as e:
