@@ -6,7 +6,7 @@ import random
 import json
 import platform
 from tqdm import tqdm
-from src.protocol.jarvis import Jarvis
+from jarvis import Jarvis
 
 # Configuration
 specific_port = 12345  # The port to scan
