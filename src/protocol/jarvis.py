@@ -6,6 +6,7 @@ import zlib
 import struct
 import time
 import queue
+from cryptography.hazmat.backend import default_backend
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization
@@ -92,7 +93,7 @@ class Jarvis:
         """
         try:
             with open(self.private_key_file, "rb") as f:
-                private_key = serialization.load_pem_private_key(f.read(), password=None)
+                private_key = serialization.load_pem_private_key(f.read(), password=None, backend=default_backend())
 
             # Decrypt the message using the private key
             decrypted = private_key.decrypt(
@@ -118,7 +119,7 @@ class Jarvis:
         """
         try:
             with open(self.public_key_file, "rb") as f:
-                public_key = serialization.load_pem_public_key(f.read())
+                public_key = serialization.load_pem_public_key(f.read(), backend=default_backend())
 
             # Encrypt the message using the public key
             encrypted = public_key.encrypt(
