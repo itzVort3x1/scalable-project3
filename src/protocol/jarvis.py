@@ -321,7 +321,7 @@ class Jarvis:
         full_message = self.build_message(dest_ip, message)
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.connect((dest_ip, self.send_port))
+                s.connect((dest_ip, self.receive_port))
                 s.sendall(full_message)
                 print(f"Message sent to {dest_ip}: {message}")
         except Exception as e:
