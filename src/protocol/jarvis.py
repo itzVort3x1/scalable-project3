@@ -13,7 +13,7 @@ from cryptography.hazmat.primitives import serialization
 
 
 class Jarvis:
-    def __init__(self, receive_port=12345, send_port=12345, adjacency_list_file="./protocol/discovery/adjacency_list.json"):
+    def __init__(self, receive_port=33000, send_port=34000, adjacency_list_file="./protocol/discovery/adjacency_list.json"):
         self.receive_port = receive_port
         self.send_port = send_port
         self.local_ip = self.get_local_ip()
