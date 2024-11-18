@@ -25,6 +25,7 @@ class Jarvis:
         self.private_key_file = os.path.join(self.project_root, "private_key.pem")  # Private key path
         self.public_key_file = os.path.join(self.project_root, "public_key.pem")    # Public key path
         self.message_queue = queue.Queue()
+        print(self.adjacency_list)
 
     @staticmethod
     def get_local_ip():
