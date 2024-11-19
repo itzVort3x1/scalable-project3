@@ -256,4 +256,5 @@ class Clinic:
 # main
 if __name__ == "__main__":
     clinic = Clinic('yumo', '001', '0.01')
-    clinic.start_random(1)
+    seed = random.randint
+    clinic.start_random(seed)
