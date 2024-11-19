@@ -1,4 +1,5 @@
 import base64
+import random
 import socket
 import sys
 import os
@@ -128,7 +129,7 @@ class Clinic:
         
         # Start sending messages to the selected clinic
         self.interactive_cli(selected_ip)
-
+        
     def interactive_cli(self, selected_ip):
         while True:
             print("\nOptions:")
@@ -242,8 +243,15 @@ class Clinic:
     def disable_forward_smartwatch_data(self):
         self.forward_smartwatch_flag = False
         
-    
+    def start_random(seed):
+        #print some random content
+        random.seed(seed)
+        print(random.random())
+        print(random.randint(1, 100))
+        print(random.choice(['a', 'b', 'c']))
+        print(random.choices(['a', 'b', 'c'], k=2))
+        print(random.sample(['a', 'b', 'c'], 2))
 # main
 if __name__ == "__main__":
     clinic = Clinic('yumo', '001', '0.01')
-    clinic.start()
+    clinic.start_random(1)
