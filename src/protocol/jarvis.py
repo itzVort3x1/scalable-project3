@@ -5,6 +5,7 @@ import json
 import zlib
 import struct
 import time
+
 import queue
 
 from cryptography.hazmat.backends import default_backend
@@ -22,6 +23,7 @@ class Jarvis:
         self.project_root = os.path.abspath(os.path.dirname(__file__))  # Get project root dynamically
         self.private_key_file = os.path.join(self.project_root, "private_key.pem")  # Private key path
         self.public_key_file = os.path.join(self.project_root, "public_key.pem")    # Public key path
+
 
     @staticmethod
     def get_local_ip():
@@ -351,6 +353,7 @@ class Jarvis:
                 with conn:
                     data = conn.recv(4096)
                     print(">>>>>", data)
+                    self.receive_callback(data)
                     self.handle_message(data)
 
     def start(self):
@@ -374,6 +377,8 @@ class Jarvis:
             else:
                 print("Invalid choice.")
 
+    def set_receive_callback(self, callback):
+        self.receive_callback = callback
 
 if __name__ == "__main__":
     node = Jarvis()
