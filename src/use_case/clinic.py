@@ -243,18 +243,61 @@ class Clinic:
     def disable_forward_smartwatch_data(self):
         self.forward_smartwatch_flag = False
         
-    def start_random(self, seed=None):
-        #print some random content
+    def generate_health_metrics_full(self):
+        heart_rate = random.randint(50, 120)  # Heart rate in bpm
+        blood_pressure = {
+            "systolic": random.randint(100, 150),  # Systolic blood pressure
+            "diastolic": random.randint(60, 100),  # Diastolic blood pressure
+        }
+        spo2 = random.randint(90, 102)  # Blood oxygen saturation percentage
+        temperature = round(random.uniform(35.0, 39.0), 1)  # Body temperature in Celsius
+        respiratory_rate = random.randint(12, 30)  # Breaths per minute
+        blood_sugar = round(random.uniform(70.0, 180.0), 1)  # Blood sugar in mg/dL
+        hydration_level = round(random.uniform(40.0, 100.0), 1)  # Hydration level percentage
+        stress_level = random.randint(1, 10)  # Stress level on a scale of 1 to 10
+        sleep_quality = random.randint(1, 100)  # Sleep quality score
+        body_fat_percentage = round(random.uniform(5.0, 30.0), 1)  # Body fat percentage
+        muscle_mass_percentage = round(random.uniform(20.0, 60.0), 1)  # Muscle mass percentage
+        cholesterol = {
+            "ldl": round(random.uniform(50.0, 200.0), 1),  # LDL cholesterol in mg/dL
+            "hdl": round(random.uniform(30.0, 100.0), 1),  # HDL cholesterol in mg/dL
+        }
+        bmi = round(random.uniform(15.0, 40.0), 1)  # Body Mass Index
+        heart_rate_variability = round(random.uniform(20.0, 120.0), 1)  # HRV in milliseconds
+        skin_temperature = round(random.uniform(30.0, 36.0), 1)  # Skin temperature in Celsius
+        activity_level = random.randint(1, 100)  # Activity level score
+        fatigue_index = random.randint(1, 10)  # Fatigue index (1 is low fatigue, 10 is high)
+        vision_acuity = round(random.uniform(0.5, 2.0), 2)  # Vision acuity (simulating 20/20 scale)
+        hearing_level = random.randint(10, 50)  # Hearing ability (lower is better, in dB)
+
+        return {
+            "heart_rate": heart_rate,
+            "blood_pressure": blood_pressure,
+            "spo2": spo2,
+            "temperature": temperature,
+            "respiratory_rate": respiratory_rate,
+            "blood_sugar": blood_sugar,
+            "hydration_level": hydration_level,
+            "stress_level": stress_level,
+            "sleep_quality": sleep_quality,
+            "body_fat_percentage": body_fat_percentage,
+            "muscle_mass_percentage": muscle_mass_percentage,
+            "cholesterol": cholesterol,
+            "bmi": bmi,
+            "heart_rate_variability": heart_rate_variability,
+            "skin_temperature": skin_temperature,
+            "activity_level": activity_level,
+            "fatigue_index": fatigue_index,
+            "vision_acuity": vision_acuity,
+            "hearing_level": hearing_level,
+        }
+
+    def start_print(self):
         while True:
-            if seed is not None:
-                random.seed(seed)
-            print(random.random())
-            print(random.randint(1, 100))
-            print(random.choice('abcdefghijklmnopqrstuvwxyz'))
-            #random generate a word
-            print(''.join(random.choices('abcdefghijklmnopqrstuvwxyz', k=5)))
+            metrics = self.generate_health_metrics_full()
+            print(json.dumps(metrics, indent=2))
             time.sleep(5)
 # main
 if __name__ == "__main__":
     clinic = Clinic('yumo', '001', '0.01')
-    clinic.start_random()
+    clinic.start_print()
