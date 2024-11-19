@@ -98,6 +98,38 @@ def mock_smartwatch_data():
 
         time.sleep(1)  # Check every second
 
+def mock_smartwatch_data_return_str():
+    """Mock data from a smartwatch."""
+    last_coordinates_time = 0
+    last_health_metrics_time = 0
+
+    current_time = time.time()
+
+    data = {}
+
+    # Send coordinates every 5 seconds
+    if current_time - last_coordinates_time >= 5:
+        data["coordinates"] = generate_coordinates()
+        last_coordinates_time = current_time
+
+    # Send health metrics every 10 seconds
+    if current_time - last_health_metrics_time >= 10:
+        health_metrics = generate_health_metrics()
+        data["health_metrics"] = health_metrics
+
+        # Check for spikes in health metrics
+        spikes = check_for_spikes(health_metrics)
+        if spikes:
+            print("\nWarning: Health metric spikes detected!")
+            for spike in spikes:
+                print(spike)
+
+        last_health_metrics_time = current_time
+
+    if data:  # If there's new data to send
+        json_string = json.dumps(data, indent=2)
+        return json_string
+
 # Run the mock data generator
 if __name__ == "__main__":
     try:
