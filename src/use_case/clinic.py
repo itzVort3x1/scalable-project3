@@ -243,14 +243,16 @@ class Clinic:
     def disable_forward_smartwatch_data(self):
         self.forward_smartwatch_flag = False
         
-    def start_random(seed):
+    def start_random(self, seed):
         #print some random content
-        random.seed(seed)
-        print(random.random())
-        print(random.randint(1, 100))
-        print(random.choice(['a', 'b', 'c']))
-        print(random.choices(['a', 'b', 'c'], k=2))
-        print(random.sample(['a', 'b', 'c'], 2))
+        while True:
+            random.seed(seed)
+            print(random.random())
+            print(random.randint(1, 100))
+            print(random.choice(['a', 'b', 'c']))
+            print(random.choices(['a', 'b', 'c'], k=2))
+            print(random.sample(['a', 'b', 'c'], 2))
+            time.sleep(5)
 # main
 if __name__ == "__main__":
     clinic = Clinic('yumo', '001', '0.01')
