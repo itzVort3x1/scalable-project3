@@ -351,7 +351,8 @@ class Jarvis:
                 with conn:
                     data = conn.recv(4096)
                     print(">>>>>", data)
-                    self.receive_message_callback(data)
+                    if self.receive_message_callback:
+                        self.receive_message_callback(data)
                     self.handle_message(data)
 
     def start(self):
